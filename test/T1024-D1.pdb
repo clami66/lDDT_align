@@ -1,9 +1,14 @@
 REMARK  T1024
-REMARK   3   RESOLUTION RANGE HIGH (ANGSTROMS) : 2.90 
-REMARK   3   R VALUE     (WORKING + TEST SET) : 0.225 
-REMARK   3   FREE R VALUE                     : 0.238 
-REMARK   3   MEAN B VALUE      (OVERALL, A**2) : 83.60 
-CRYST1  104.760  139.990  115.700  90.00  90.00  90.00 C 2 2 21        
+REMARK   3   RESOLUTION RANGE HIGH (ANGSTROMS) : 2.90
+ 
+REMARK   3   R VALUE     (WORKING + TEST SET) : 0.225
+ 
+REMARK   3   FREE R VALUE                     : 0.238
+ 
+REMARK   3   MEAN B VALUE      (OVERALL, A**2) : 83.60
+ 
+CRYST1  104.760  139.990  115.700  90.00  90.00  90.00 C 2 2 21       
+ 
 ATOM      5  N   LYS     2      12.409   4.092   3.031  1.00126.08           N   
 ATOM      6  CA  LYS     2      13.759   3.622   3.387  1.00126.70           C   
 ATOM      7  C   LYS     2      14.688   4.809   3.637  1.00131.52           C   

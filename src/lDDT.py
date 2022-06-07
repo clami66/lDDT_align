@@ -40,12 +40,13 @@ def cache_distances(pdb):
 def distance_difference(dist1, dist2, thresholds):
     d = 0
     distance_diff = np.abs(dist1 - dist2)
-    n_total = len(thresholds) * dist1.shape[0] if dist1.shape[0] > 0 else len(thresholds)
+    n_total = dist1.shape[-1] if dist1.shape[-1] > 0 else 1
+    #print(n_total, dist1.shape)
     for threshold in thresholds:
         n_conserved = np.count_nonzero(distance_diff < threshold)
         d += n_conserved/n_total
     
-    return d
+    return d/len(thresholds)
 
 def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
 
@@ -75,36 +76,39 @@ def backtrack(picks, seq1, seq2, i, j):
         elif picks[i, j] == 2:
                 return aln + seq1[i] + "-"
 
+
+def score_match(dist1, dist2, i, j, selection, thresholds):
+    return sum([distance_difference(dist1[c, i, np.where(selection[c,i,:])], dist2[c, j, np.where(selection[c,i,:])], thresholds) for c in range(2)])/2
+
+
 def needle2(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0):
     l1 = dist1.shape[-1]
     l2 = dist2.shape[-1]
-    table = np.zeros((l1, l2))
+    table = np.zeros((l1+1, l2+1))
+    table[:,0] = table[0,:] = 0
     picks = np.zeros((l1, l2))
     
     selection = (dist1 < r0) & (dist1 != 0)
     dist2[dist2 == 0] = max(thresholds) + 1
     
     # fill in table
-    for i in range(l1):
-        for j in range(l2):
-            selected_ca = np.where(selection[0,i,:l2-j])
-            selected_ce = np.where(selection[1,i,:l2-j])
-            delete = table[i-1, j] if i > 0 else 0
-            insert = table[i, j-1] if j > 0 else 0
+    for i in range(1, l1+1):
+        for j in range(1, l2+1):
+            delete = table[i-1, j]
+            insert = table[i, j-1]
 
-            match = table[i-1, j-1] if (i > 0 and j > 0) else 0
-            match += (distance_difference(dist1[0, i, selected_ca], dist2[0, j, selected_ca], thresholds) + distance_difference(dist1[1, i, selected_ce], dist2[1, j, selected_ce], thresholds))/2
-
+            match = table[i-1, j-1] #if (i > 0 and j > 0) else 0
+            match += score_match(dist1, dist2, i-1, j-1, selection, thresholds)
             if match >= insert and match >= delete:
                 table[i,j] = match
-                picks[i,j] = 0
+                picks[i-1,j-1] = 0
             elif insert >= delete:
                 table[i,j] = insert
-                picks[i,j] = 1
+                picks[i-1,j-1] = 1
             else:
                 table[i,j] = delete
-                picks[i,j] = 2
-
+                picks[i-1,j-1] = 2
+    print(picks[:5,:5])
     global_lddt = table[-1, -1]/min(l1, l2)
     
     # backtracking
@@ -113,11 +117,16 @@ def needle2(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0):
     print(alignments[::2])
     print(alignments[1::2])
     with open("foo", "w") as out:
-        out.write("/" + " ".join(seq2) + "\n")
-        for i,row in enumerate(picks):
-            out.write(seq1[i] + " ")
+        out.write("/ " + " ".join(seq2) + "\n")
+        for i, row in enumerate(table):
+            if i > 0:
+                out.write(seq1[i-1] + " ")
+            else:
+                pass
             for j,col in enumerate(row):
-                out.write(str(int(col)) + " ")
+                
+                out.write(str(col) + " ")
+                
             out.write("\n")
     
     return global_lddt
