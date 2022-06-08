@@ -57,48 +57,6 @@ def traceback(trace, seq1, seq2, i, j):
     j = trace.shape[1] - 1
     upper_band = j - i
     lower_band = j - i
-    path[i - 1, j -1] = 1
-    while i >= 0 if j > i else j >= 0:
-        while j >= 0 if i > j else i >= 0:
-            if trace[i, j] == 0:
-                aln1 += seq1[i]
-                aln2 += seq2[j]
-                i -= 1
-                j -= 1
-            elif trace[i, j] == 1:
-                aln1 += "-"
-                aln2 += seq2[j]
-                j -= 1
-            else:
-                aln1 += seq1[i]
-                aln2 += "-"
-                i -= 1
-            if j - i > upper_band:
-                upper_band = j - i
-            elif j - i < lower_band:
-                lower_band = j - i
-        while i >= 0:
-            aln1 += seq1[i]
-            aln2 += "-"
-            i -= 1
-            if j - i > upper_band:
-                upper_band = j - i
-        while j >= 0:
-            aln2 += seq2[j]
-            aln1 += "-"
-            j -= 1
-            if j - i < lower_band:
-                lower_band = j - i
-    return aln1[::-1], aln2[::-1], lower_band, upper_band
-
-
-def traceback2(trace, seq1, seq2, i, j):
-    aln1 = ""
-    aln2 = ""
-    i = trace.shape[0] - 1
-    j = trace.shape[1] - 1
-    upper_band = j - i
-    lower_band = j - i
     path = np.zeros((i + 1, j + 1))
     path[i - 1, j -1] = 1
     while i >= 0 if j > i else j >= 0:
@@ -117,23 +75,15 @@ def traceback2(trace, seq1, seq2, i, j):
                 aln2 += "-"
                 i -= 1
             path[i, j] = 1
-            if j - i > upper_band:
-                upper_band = j - i
-            elif j - i < lower_band:
-                lower_band = j - i
         while i >= 0:
             aln1 += seq1[i]
             aln2 += "-"
             i -= 1
-            if j - i > upper_band:
-                upper_band = j - i
             path[i, j] = 1
         while j >= 0:
             aln2 += seq2[j]
             aln1 += "-"
             j -= 1
-            if j - i < lower_band:
-                lower_band = j - i
             path[i, j] = 1
     return aln1[::-1], aln2[::-1], path
 
@@ -199,16 +149,14 @@ def align(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0, scale=3,
 
     global_lddt = table[-1, -1] / min(l1, l2)
 
-    alignment1, alignment2, path = traceback2(trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1)
+    alignment1, alignment2, path = traceback(trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1)
     path = ndimage.binary_dilation(path, iterations=5)
     path = np.kron(path, np.ones((scale, scale)))
     path = np.pad(path, ((0, dist1.shape[-1] - path.shape[0]), (0, dist2.shape[-1] - path.shape[1])), "maximum")
     return global_lddt, (alignment1, alignment2), path
 
 
-def main():
-    pdb1 = argv[1]
-    pdb2 = argv[2]
+def run(pdb1, pdb2):
 
     try:
         parser = PDBParser()
@@ -228,10 +176,19 @@ def main():
     lddt, alignments, _ = align(
         ref_distances, decoy_distances, ref_seq, decoy_seq, thresholds=[4], scale=1, path=path
     )
+    
+    return lddt, alignments
+
+
+def main():
+    pdb1 = argv[1]
+    pdb2 = argv[2]
+
+    lddt, alignments = run(pdb1, pdb2)
+    
     print(f"Global lDDT score: {lddt}")
     print(alignments[0])
     print(alignments[1])
-
 
 if __name__ == "__main__":
     main()
