@@ -61,7 +61,7 @@ def traceback(trace, seq1, seq2, i, j):
                 aln1 += "-" 
                 aln2 += seq2[j]
                 j -= 1
-            elif trace[i, j] == 2:
+            else:
                 aln1 += seq1[i]
                 aln2 += "-" 
                 i -= 1
@@ -94,13 +94,13 @@ def distance_difference(dist1, dist2, thresholds):
 def score_match(dist1, dist2, i, j, selection, thresholds):
     selection1 = np.where(selection[i, :])
     selection2 = selection1[0] + j - i
-    selection2 = (selection2[selection2 < dist2.shape[-1]],)
+    selection2 = (selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)],)
 
     return distance_difference(dist1[i, selection1], 
                                dist2[j, selection2], thresholds)
 
 
-def dynamic_programming(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0):
+def align(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0):
     l1 = dist1.shape[-1]
     l2 = dist2.shape[-1]
     local_lddt = np.zeros((l1, l2))
@@ -129,8 +129,8 @@ def dynamic_programming(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=
             else:
                 table[i,j] = delete
                 trace[i,j] = 2
-    plt.imshow(local_lddt, cmap ='Greens')
-    plt.show()
+    #plt.imshow(local_lddt, cmap ='Greens')
+    #plt.show()
 
     global_lddt = table[-1, -1]/min(l1, l2)
     
@@ -167,7 +167,7 @@ def main():
         
     decoy_seq, decoy_distances = cache_distances(decoy)        
     ref_seq, ref_distances = cache_distances(ref)
-    lddt = dynamic_programming(ref_distances, decoy_distances, ref_seq, decoy_seq, thresholds=[4])
+    lddt = align(ref_distances, decoy_distances, ref_seq, decoy_seq, thresholds=[4])
     print(lddt)
 
 if __name__ == "__main__":
