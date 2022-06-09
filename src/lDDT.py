@@ -57,6 +57,7 @@ def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
 def traceback(trace, seq1, seq2, i, j):
     aln1 = ""
     aln2 = ""
+    pipes = ""
     i = trace.shape[0] - 1
     j = trace.shape[1] - 1
     upper_band = j - i
@@ -68,28 +69,33 @@ def traceback(trace, seq1, seq2, i, j):
             if trace[i, j] == 0:
                 aln1 += seq1[i]
                 aln2 += seq2[j]
+                pipes += ":"
                 i -= 1
                 j -= 1
             elif trace[i, j] == 1:
                 aln1 += "-"
                 aln2 += seq2[j]
+                pipes += " "
                 j -= 1
             else:
                 aln1 += seq1[i]
                 aln2 += "-"
+                pipes += " "
                 i -= 1
             path[i, j] = 1
         while i >= 0:
             aln1 += seq1[i]
             aln2 += "-"
+            pipes += " "
             i -= 1
             path[i, j] = 1
         while j >= 0:
             aln2 += seq2[j]
             aln1 += "-"
+            pipes += " "
             j -= 1
             path[i, j] = 1
-    return aln1[::-1], aln2[::-1], path
+    return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
 def distance_difference(dist1, dist2, thresholds):
@@ -127,13 +133,18 @@ def align(
     scale=1,
     path=None,
 ):
-    l1 = dist1.shape[-1] // scale
-    l2 = dist2.shape[-1] // scale
+    l1_orig = dist1.shape[-1]
+    l2_orig = dist2.shape[-1]
+    l1 = l1_orig // scale
+    l2 = l2_orig // scale
     local_lddt = np.zeros((l1, l2))
     table = np.zeros((l1, l2))
     trace = np.zeros((l1, l2))
 
-    selection = (dist1[::scale, ::scale] < r0) & (dist1[::scale, ::scale] != 0)
+    # downscale structures
+    dist1 = dist1[::scale, ::scale]
+    dist2 = dist2[::scale, ::scale]
+    selection = (dist1 < r0) & (dist1 != 0)
     selection_i = [np.where(selection[i, :]) for i in range(l1)]
     dist2[dist2 == 0] = max(thresholds) + 1
 
@@ -146,8 +157,8 @@ def align(
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
                 local_lddt[i, j] = score_match(
-                    dist1[::scale, ::scale],
-                    dist2[::scale, ::scale],
+                    dist1,
+                    dist2,
                     i,
                     j,
                     selection_i[i],
@@ -165,19 +176,20 @@ def align(
                     table[i, j] = delete
                     trace[i, j] = 2
 
-    global_lddt = table[-1, -1] / min(l1, l2)
+    # lddt is normalized by the reference length
+    global_lddt = table[-1, -1] / l1
 
-    alignment1, alignment2, path = traceback(
+    alignment1, alignment2, pipes, path = traceback(
         trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1
     )
     path = ndimage.binary_dilation(path, iterations=scale)
     path = np.kron(path, np.ones((scale, scale)))
     path = np.pad(
         path,
-        ((0, dist1.shape[-1] - path.shape[0]), (0, dist2.shape[-1] - path.shape[1])),
+        ((0, l1_orig - path.shape[0]), (0, l2_orig - path.shape[1])),
         "maximum",
     )
-    return global_lddt, (alignment1, alignment2), path
+    return global_lddt, (alignment1, alignment2, pipes), path
 
 
 def run(args):
@@ -275,6 +287,7 @@ def main():
 
     print(f"Global lDDT score: {lddt}")
     print(alignments[0])
+    print(alignments[2])
     print(alignments[1])
 
 
