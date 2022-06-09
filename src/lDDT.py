@@ -12,25 +12,27 @@ from scipy import ndimage
 
 def cache_distances(pdb, atom_type="CA"):
 
-    backbone_ids = ["N", "CA", "C", "O"]
+    backbone_ids = ["N", "C", "O"]
     model = pdb
-    nres = len([_ for _ in model.get_residues() if PDB.is_aa(_)])
+    reslist = [_ for _ in model.get_residues() if PDB.is_aa(_)]
+    nres = len(reslist)
 
     coords = np.zeros((nres, 3))
     sequence = ""
 
-    for i, residue in enumerate([_ for _ in model.get_residues() if PDB.is_aa(_)]):
+    for i, residue in enumerate(reslist):
         centroid_counter = 1
         for atom in residue.get_atoms():
-            if atom.get_id() == "CA":
+            if atom_type == "CA" and atom.get_id() == "CA":
                 coords[i, :] = atom.get_coord()
                 sequence += seq1(residue.get_resname())
-            # elif atom.get_id() not in backbone_ids:
-            #    coords[1, i, :] += atom.get_coord()
-            #    centroid_counter += 1
-        # coords[1, i, :] /= centroid_counter
+            elif atom_type == "centroid" and atom.get_id() not in backbone_ids:
+                coords[i, :] += atom.get_coord()
+                if centroid_counter == 1:
+                    sequence += seq1(residue.get_resname())
+                centroid_counter += 1
+        coords[i, :] /= centroid_counter
 
-    # distances = cdist(coords, coords)
     distances = np.sqrt(
         np.sum((coords[:, np.newaxis, :] - coords[np.newaxis, :, :]) ** 2, axis=2)
     )
@@ -189,8 +191,8 @@ def run(args):
     except Exception as e:
         print(e)
 
-    decoy_seq, decoy_distances = cache_distances(decoy)
-    ref_seq, ref_distances = cache_distances(ref)
+    decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
+    ref_seq, ref_distances = cache_distances(ref, atom_type=args.atom_type)
 
     # The initial search is done by scaling down the structure of a factor args.scale
     _, _, path = align(
@@ -226,23 +228,34 @@ def main():
     )
     parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
     parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
-    parser.add_argument("--thresholds", "-t", metavar="thr", type=float, nargs='+',
-                    help="List of thresholds for lDDT scoring (default: %(default)s)", default=[2])
     parser.add_argument(
-        "--inclusion-radius", "-r0",
+        "--thresholds",
+        "-t",
+        metavar="thr",
+        type=float,
+        nargs="+",
+        help="List of thresholds for lDDT scoring (default: %(default)s)",
+        default=[2],
+    )
+    parser.add_argument(
+        "--inclusion-radius",
+        "-r0",
         dest="r0",
         type=float,
         default=15.0,
         help="Inclusion radius (default: %(default)s)",
     )
+    parser.add_argument("--atom-type", "-a", metavar="type", type=str, choices=["CA", "centroid"], default="CA", help="Atom type to calculate distances (choices: {%(choices)s}, default: %(default)s)")
     parser.add_argument(
-        "--scale", "-s",
+        "--scale",
+        "-s",
         dest="scale",
         default=3,
         help="Scale factor for the initial alignment (default: %(default)s)",
     )
     parser.add_argument(
-        "--gap-penalty", "-g",
+        "--gap-penalty",
+        "-g",
         dest="gap_pen",
         type=float,
         default=0.0,
