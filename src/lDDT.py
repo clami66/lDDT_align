@@ -12,7 +12,7 @@ from scipy import ndimage
 
 def cache_distances(pdb, atom_type="CA"):
 
-    backbone_ids = ["N", "C", "O"]
+    backbone_ids = ["N", "CA", "C", "O"]
     model = pdb
     reslist = [_ for _ in model.get_residues() if PDB.is_aa(_)]
     nres = len(reslist)
@@ -245,7 +245,15 @@ def main():
         default=15.0,
         help="Inclusion radius (default: %(default)s)",
     )
-    parser.add_argument("--atom-type", "-a", metavar="type", type=str, choices=["CA", "centroid"], default="CA", help="Atom type to calculate distances (choices: {%(choices)s}, default: %(default)s)")
+    parser.add_argument(
+        "--atom-type",
+        "-a",
+        metavar="type",
+        type=str,
+        choices=["CA", "centroid"],
+        default="CA",
+        help="Atom type to calculate distances (choices: {%(choices)s}, default: %(default)s)",
+    )
     parser.add_argument(
         "--scale",
         "-s",
