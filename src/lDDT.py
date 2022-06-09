@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 from sys import argv, maxsize
 import numpy as np
 from Bio import PDB
@@ -7,6 +8,7 @@ from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1
 import matplotlib.pyplot as plt
 from scipy import ndimage
+
 
 def cache_distances(pdb, atom_type="CA"):
 
@@ -58,7 +60,7 @@ def traceback(trace, seq1, seq2, i, j):
     upper_band = j - i
     lower_band = j - i
     path = np.zeros((i + 1, j + 1))
-    path[i - 1, j -1] = 1
+    path[i - 1, j - 1] = 1
     while i >= 0 if j > i else j >= 0:
         while j >= 0 if i > j else i >= 0:
             if trace[i, j] == 0:
@@ -105,16 +107,24 @@ def distance_difference(dist1, dist2, thresholds):
 
 
 def score_match(dist1, dist2, i, j, selection1, thresholds):
-    #selection1 = np.where(selection[i, :])
+    # selection1 = np.where(selection[i, :])
     selection2 = selection1[0] + j - i
     selection2 = (selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)],)
 
     return distance_difference(dist1[i, selection1], dist2[j, selection2], thresholds)
 
 
-def align(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0, scale=3, path=None):
-    l1_orig = dist1.shape[-1]
-    l2_orig = dist2.shape[-1]
+def align(
+    dist1,
+    dist2,
+    seq1,
+    seq2,
+    thresholds=[0.5, 1, 2, 4],
+    r0=15.0,
+    gap_pen=0,
+    scale=1,
+    path=None,
+):
     l1 = dist1.shape[-1] // scale
     l2 = dist2.shape[-1] // scale
     local_lddt = np.zeros((l1, l2))
@@ -122,19 +132,25 @@ def align(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0, scale=3,
     trace = np.zeros((l1, l2))
 
     selection = (dist1[::scale, ::scale] < r0) & (dist1[::scale, ::scale] != 0)
-    selection_i = [np.where(selection[i,:]) for i in range(l1)]
+    selection_i = [np.where(selection[i, :]) for i in range(l1)]
     dist2[dist2 == 0] = max(thresholds) + 1
 
     # fill in table
     for i in range(0, l1):
         for j in range(0, l2):
-            #print(i, j)
             if path[i, j] if path is not None else True:
-                delete = table[i - 1, j] if i > 0 else 0
-                insert = table[i, j - 1] if j > 0 else 0
+                delete = table[i - 1, j] - gap_pen if i > 0 else -gap_pen
+                insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
-                local_lddt[i, j] = score_match(dist1[::scale, ::scale], dist2[::scale, ::scale], i, j, selection_i[i], thresholds)
+                local_lddt[i, j] = score_match(
+                    dist1[::scale, ::scale],
+                    dist2[::scale, ::scale],
+                    i,
+                    j,
+                    selection_i[i],
+                    thresholds,
+                )
                 match += local_lddt[i, j]
 
                 if match > insert and match > delete:
@@ -149,46 +165,97 @@ def align(dist1, dist2, seq1, seq2, thresholds=[0.5, 1, 2, 4], r0=15.0, scale=3,
 
     global_lddt = table[-1, -1] / min(l1, l2)
 
-    alignment1, alignment2, path = traceback(trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1)
-    path = ndimage.binary_dilation(path, iterations=5)
+    alignment1, alignment2, path = traceback(
+        trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1
+    )
+    path = ndimage.binary_dilation(path, iterations=scale)
     path = np.kron(path, np.ones((scale, scale)))
-    path = np.pad(path, ((0, dist1.shape[-1] - path.shape[0]), (0, dist2.shape[-1] - path.shape[1])), "maximum")
+    path = np.pad(
+        path,
+        ((0, dist1.shape[-1] - path.shape[0]), (0, dist2.shape[-1] - path.shape[1])),
+        "maximum",
+    )
     return global_lddt, (alignment1, alignment2), path
 
 
-def run(pdb1, pdb2):
+def run(args):
 
     try:
         parser = PDBParser()
 
-        ref = parser.get_structure("decoy", pdb1)[0]
-        decoy = parser.get_structure("reference", pdb2)[0]
+        ref = parser.get_structure("decoy", args.ref)[0]
+        decoy = parser.get_structure("reference", args.query)[0]
 
     except Exception as e:
         print(e)
 
     decoy_seq, decoy_distances = cache_distances(decoy)
     ref_seq, ref_distances = cache_distances(ref)
+
+    # The initial search is done by scaling down the structure of a factor args.scale
     _, _, path = align(
-        ref_distances, decoy_distances, ref_seq, decoy_seq, thresholds=[4], scale=3
+        ref_distances,
+        decoy_distances,
+        ref_seq,
+        decoy_seq,
+        thresholds=args.thresholds,
+        r0=args.r0,
+        scale=args.scale,
+        gap_pen=args.gap_pen,
     )
-    
+
+    # The second search is full-scale, but follows the neighborhood of the path found in the first search
     lddt, alignments, _ = align(
-        ref_distances, decoy_distances, ref_seq, decoy_seq, thresholds=[4], scale=1, path=path
+        ref_distances,
+        decoy_distances,
+        ref_seq,
+        decoy_seq,
+        thresholds=args.thresholds,
+        r0=args.r0,
+        path=path,
+        gap_pen=args.gap_pen,
     )
-    
+
     return lddt, alignments
 
 
 def main():
-    pdb1 = argv[1]
-    pdb2 = argv[2]
 
-    lddt, alignments = run(pdb1, pdb2)
-    
+    parser = argparse.ArgumentParser(
+        description="Performs structural alignment of two proteins in order to optimize their mutual global lDDT"
+    )
+    parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
+    parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
+    parser.add_argument("--thresholds", "-t", metavar="thr", type=float, nargs='+',
+                    help="List of thresholds for lDDT scoring (default: %(default)s)", default=[2])
+    parser.add_argument(
+        "--inclusion-radius", "-r0",
+        dest="r0",
+        type=float,
+        default=15.0,
+        help="Inclusion radius (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--scale", "-s",
+        dest="scale",
+        default=3,
+        help="Scale factor for the initial alignment (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--gap-penalty", "-g",
+        dest="gap_pen",
+        type=float,
+        default=0.0,
+        help="Penalty to open or extend a gap in the alignment (default: %(default)s)",
+    )
+    args = parser.parse_args()
+
+    lddt, alignments = run(args)
+
     print(f"Global lDDT score: {lddt}")
     print(alignments[0])
     print(alignments[1])
+
 
 if __name__ == "__main__":
     main()
