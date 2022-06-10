@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-from sys import argv, maxsize
+import pickle
 import numpy as np
 from Bio import PDB
 from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1
-import matplotlib.pyplot as plt
 from scipy import ndimage
-
 
 def cache_distances(pdb, atom_type="CA"):
 
@@ -98,28 +96,24 @@ def traceback(trace, seq1, seq2, i, j):
     return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
-def distance_difference(dist1, dist2, thresholds):
-    d = 0
+def distance_difference(dist1, dist2, threshold):
+
     n_dist1 = dist1.shape[-1]
     n_dist2 = dist2.shape[-1]
 
     n_dist = min(n_dist1, n_dist2)
-    distance_diff = np.abs(dist1[:, :n_dist] - dist2[:, :n_dist])
-    n_total = n_dist1 if n_dist1 > 0 else 1
-
-    for threshold in thresholds:
-        n_conserved = np.count_nonzero(distance_diff < threshold)
-        d += n_conserved / n_total
-
-    return d / len(thresholds)
+    distance_diff = np.abs(dist1[:n_dist] - dist2[:n_dist]) < threshold
+    #n_total = n_dist1 if n_dist1 > 0 else 1
+    n_conserved = np.count_nonzero(distance_diff)
+    return n_conserved
 
 
-def score_match(dist1, dist2, i, j, selection1, thresholds):
+def score_match(dist1, dist2, diff, selection1, thresholds):
     # selection1 = np.where(selection[i, :])
-    selection2 = selection1[0] + j - i
+    selection2 = selection1 + diff
     selection2 = (selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)],)
 
-    return distance_difference(dist1[i, selection1], dist2[j, selection2], thresholds)
+    return distance_difference(dist1[selection1], dist2[selection2], thresholds)
 
 
 def align(
@@ -127,7 +121,7 @@ def align(
     dist2,
     seq1,
     seq2,
-    thresholds=[0.5, 1, 2, 4],
+    thresholds=[2],
     r0=15.0,
     gap_pen=0,
     scale=1,
@@ -141,11 +135,18 @@ def align(
     table = np.zeros((l1, l2))
     trace = np.zeros((l1, l2))
 
-    # downscale structures
-    dist1 = dist1[::scale, ::scale]
-    dist2 = dist2[::scale, ::scale]
+    if scale > 1:
+        # downscale structures
+        dist1 = dist1[::scale, ::scale]
+        dist2 = dist2[::scale, ::scale]
+        seq1 = seq1[::scale]
+        seq2 = seq2[::scale]
+    
     selection = (dist1 < r0) & (dist1 != 0)
-    selection_i = [np.where(selection[i, :]) for i in range(l1)]
+    n_total_dist = np.count_nonzero(selection, axis=0)
+    n_total_dist[n_total_dist == 0] = 1
+    #print(np.abs(dist1 - dist2)[selection])
+    selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
     dist2[dist2 == 0] = max(thresholds) + 1
 
     # fill in table
@@ -156,14 +157,14 @@ def align(
                 insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
+            
                 local_lddt[i, j] = score_match(
-                    dist1,
-                    dist2,
-                    i,
-                    j,
+                    dist1[i],
+                    dist2[j],
+                    j - i,
                     selection_i[i],
-                    thresholds,
-                )
+                    thresholds[0],
+                ) / n_total_dist[i]
                 match += local_lddt[i, j]
 
                 if match > insert and match > delete:
@@ -176,19 +177,22 @@ def align(
                     table[i, j] = delete
                     trace[i, j] = 2
 
+    print(local_lddt[:5, :5])
     # lddt is normalized by the reference length
     global_lddt = table[-1, -1] / l1
 
     alignment1, alignment2, pipes, path = traceback(
-        trace, seq1[::scale], seq2[::scale], trace.shape[0] - 1, trace.shape[1] - 1
+        trace, seq1, seq2, trace.shape[0] - 1, trace.shape[1] - 1
     )
-    path = ndimage.binary_dilation(path, iterations=scale)
-    path = np.kron(path, np.ones((scale, scale)))
-    path = np.pad(
-        path,
-        ((0, l1_orig - path.shape[0]), (0, l2_orig - path.shape[1])),
-        "maximum",
-    )
+    
+    if scale > 1:
+        path = ndimage.binary_dilation(path, iterations=3)
+        path = np.kron(path, np.ones((scale, scale)))
+        path = np.pad(
+            path,
+            ((0, l1_orig - path.shape[0]), (0, l2_orig - path.shape[1])),
+            "maximum",
+        )
     return global_lddt, (alignment1, alignment2, pipes), path
 
 
@@ -197,26 +201,27 @@ def run(args):
     try:
         parser = PDBParser()
 
-        ref = parser.get_structure("decoy", args.ref)[0]
-        decoy = parser.get_structure("reference", args.query)[0]
+        ref = parser.get_structure("reference", args.ref)[0]
+        decoy = parser.get_structure("decoy", args.query)[0]
 
     except Exception as e:
         print(e)
 
     decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
     ref_seq, ref_distances = cache_distances(ref, atom_type=args.atom_type)
-
-    # The initial search is done by scaling down the structure of a factor args.scale
-    _, _, path = align(
-        ref_distances,
-        decoy_distances,
-        ref_seq,
-        decoy_seq,
-        thresholds=args.thresholds,
-        r0=args.r0,
-        scale=args.scale,
-        gap_pen=args.gap_pen,
-    )
+    path = None
+    if args.scale > 1:
+        # The initial search is done by scaling down the structure of a factor args.scale
+        _, _, path = align(
+            ref_distances,
+            decoy_distances,
+            ref_seq,
+            decoy_seq,
+            thresholds=args.thresholds,
+            r0=args.r0,
+            scale=args.scale,
+            gap_pen=args.gap_pen,
+        )
 
     # The second search is full-scale, but follows the neighborhood of the path found in the first search
     lddt, alignments, _ = align(
@@ -232,6 +237,52 @@ def run(args):
 
     return lddt, alignments
 
+
+def run_db(args):
+
+    try:
+        parser = PDBParser()
+        decoy = parser.get_structure("decoy", args.query)[0]
+
+    except Exception as e:
+        print(e)
+
+    decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
+    
+    with open(args.ref, "rb") as f:
+        ref_data = pickle.load(f)
+    path = None
+    for name, (ref_seq, ref_distances) in ref_data.items():
+
+        if args.scale > 1:
+            # The initial search is done by scaling down the structure of a factor args.scale
+            _, _, path = align(
+                ref_distances,
+                decoy_distances,
+                ref_seq,
+                decoy_seq,
+                thresholds=args.thresholds,
+                r0=args.r0,
+                scale=args.scale,
+                gap_pen=args.gap_pen,
+            )
+
+        # The second search is full-scale, but follows the neighborhood of the path found in the first search
+        lddt, alignments, _ = align(
+            ref_distances,
+            decoy_distances,
+            ref_seq,
+            decoy_seq,
+            thresholds=args.thresholds,
+            r0=args.r0,
+            path=path,
+            gap_pen=args.gap_pen,
+        )
+
+        print(f"Reference: {name}")
+        print(f"Query: {args.query}")
+        print(f"Global lDDT score: {lddt}")
+    return
 
 def main():
 
@@ -271,6 +322,7 @@ def main():
         "-s",
         dest="scale",
         default=3,
+        type=int,
         help="Scale factor for the initial alignment (default: %(default)s)",
     )
     parser.add_argument(
@@ -283,12 +335,17 @@ def main():
     )
     args = parser.parse_args()
 
-    lddt, alignments = run(args)
+    if args.ref[-3:] == "pkl":
+        run_db(args)
+    else:
+        lddt, alignments = run(args)
 
-    print(f"Global lDDT score: {lddt}")
-    print(alignments[0])
-    print(alignments[2])
-    print(alignments[1])
+        print(f"Reference: {args.ref}")
+        print(f"Query: {args.query}")
+        print(f"Global lDDT score: {lddt}")
+        print(alignments[0])
+        print(alignments[2])
+        print(alignments[1])
 
 
 if __name__ == "__main__":
