@@ -137,8 +137,10 @@ def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
         for j in range(0, l2):
             # if a previous rough path has been established, fill only around that
             if path[i, j] if path is not None else True:
-                delete = table[i - 1, j] - gap_pen if i > 0 else -gap_pen
-                insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
+                delete = table[i - 1, j] if i > 0 else -gap_pen
+                delete -= gap_pen if i > 0 and not trace[i - 1, j] else 0
+                insert = table[i, j - 1] if j > 0 else -gap_pen
+                insert -= gap_pen if j > 0 and not trace[i, j - 1] else 0
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
                 if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
@@ -159,8 +161,8 @@ def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
                 else:
                     table[i, j] = delete
                     trace[i, j] = 2
-    # lddt is normalized by the reference length
-    global_lddt = table[-1, -1] / l1
+    # lddt is normalized by the query length
+    global_lddt = table[-1, -1] / l2
     return table, trace, global_lddt
 
 
