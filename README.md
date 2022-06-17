@@ -3,6 +3,23 @@
 
 Here, the lDDT score is calculated on single-atom amino acid representation (either CAs or sidechain centroids). The algorithm uses dynamic programming to find the optimal alignment, with some heuristics to speed up computation on larger structures.
 
+
+## Installation
+
+To download the software, run:
+
+```
+git clone https://github.com/clami66/lDDT_align.git
+```
+
+`lDDT_align` has been tested on python 3.9 and depends on the following libraries:
+
+* numpy (tested: v1.21.6)
+* scipy (tested: v1.5.3)
+* numba (tested: v0.55.1)
+* biopython (tested: v1.79)
+
+
 ### Usage:
 
 ```python
