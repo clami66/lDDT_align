@@ -117,6 +117,52 @@ def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     return count_shared(dist1[selection1], dist2[selection2], thresholds) / n_dist
 
 
+def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):   
+    local_lddt = np.zeros((l1, l2))
+    table = np.zeros((l1, l2))
+    trace = np.zeros((l1, l2))
+    
+    selection = (dist1 < r0) & (dist1 != 0)
+    n_total_dist = np.count_nonzero(selection, axis=0)
+    n_total_dist[n_total_dist == 0] = 1
+
+    selection2 = (dist2 < r0) & (dist2 != 0)
+    n_total_dist2 = np.count_nonzero(selection2, axis=0)
+    n_total_dist2[n_total_dist2 == 0] = 1
+
+    selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
+
+    for i in range(0, l1):
+        for j in range(0, l2):
+            # if a previous rough path has been established, fill only around that
+            if path[i, j] if path is not None else True:
+                delete = table[i - 1, j] - gap_pen if i > 0 else -gap_pen
+                insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
+
+                match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
+                if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
+                    local_lddt[i, j] = score_match(
+                        dist1[i],
+                        dist2[j],
+                        j - i,
+                        selection_i[i],
+                        threshold,
+                        n_total_dist[i],)
+                    match += local_lddt[i, j]
+                if match > insert and match > delete:
+                    table[i, j] = match
+                    trace[i, j] = 0
+                elif insert > delete:
+                    table[i, j] = insert
+                    trace[i, j] = 1
+                else:
+                    table[i, j] = delete
+                    trace[i, j] = 2
+    # lddt is normalized by the reference length
+    global_lddt = table[-1, -1] / l1
+    return table, trace, global_lddt
+
+
 def align(
     dist1,
     dist2,
@@ -132,64 +178,23 @@ def align(
     l2_orig = dist2.shape[-1]
     l1 = l1_orig // scale
     l2 = l2_orig // scale
-    local_lddt = np.zeros((l1, l2))
-    table = np.zeros((l1, l2))
-    trace = np.zeros((l1, l2))
 
-    if scale > 1:
-        # downscale structures
-        dist1 = dist1[::scale, ::scale]
-        dist2 = dist2[::scale, ::scale]
-        seq1 = seq1[::scale]
-        seq2 = seq2[::scale]
+    # downscale structures
+    dist1 = dist1[::scale, ::scale]
+    dist2 = dist2[::scale, ::scale]
+    seq1 = seq1[::scale]
+    seq2 = seq2[::scale]
 
-    selection = (dist1 < r0) & (dist1 != 0)
-    n_total_dist = np.count_nonzero(selection, axis=0)
-    n_total_dist[n_total_dist == 0] = 1
-
-    selection2 = (dist2 < r0) & (dist2 != 0)
-    n_total_dist2 = np.count_nonzero(selection2, axis=0)
-    n_total_dist2[n_total_dist2 == 0] = 1
-
-    selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
-
-    # fill in table
-    for i in range(0, l1):
-        for j in range(0, l2):
-            if path[i, j] if path is not None else True:
-                delete = table[i - 1, j] - gap_pen if i > 0 else -gap_pen
-                insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
-
-                match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
-                if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
-                    local_lddt[i, j] = score_match(
-                        dist1[i],
-                        dist2[j],
-                        j - i,
-                        selection_i[i],
-                        thresholds[0],
-                        n_total_dist[i],)
-                    match += local_lddt[i, j]
-                if match > insert and match > delete:
-                    table[i, j] = match
-                    trace[i, j] = 0
-                elif insert > delete:
-                    table[i, j] = insert
-                    trace[i, j] = 1
-                else:
-                    table[i, j] = delete
-                    trace[i, j] = 2
-
-    # lddt is normalized by the reference length
-    global_lddt = table[-1, -1] / l1
-
+    # two dynamic programming steps:
+    table, trace, global_lddt = fill_table(dist1, dist2, l1, l2, thresholds[0], r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
         trace, seq1, seq2, trace.shape[0] - 1, trace.shape[1] - 1
     )
-
+    
     if scale > 1:
         path = ndimage.binary_dilation(path, iterations=3)
         path = np.kron(path, np.ones((scale, scale)))
+
         path = np.pad(
             path,
             ((0, l1_orig - path.shape[0]), (0, l2_orig - path.shape[1])),
