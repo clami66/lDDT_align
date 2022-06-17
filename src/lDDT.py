@@ -3,6 +3,7 @@
 import argparse
 import pickle
 import numpy as np
+from numba import jit
 from Bio import PDB
 from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1
@@ -96,21 +97,23 @@ def traceback(trace, seq1, seq2, i, j):
     return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
+@jit
 def count_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) < threshold
     return np.count_nonzero(distance_diff)
 
 
+@jit
 def count_non_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) > threshold
     return np.count_nonzero(distance_diff)
 
 
+@jit
 def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     selection2 = selection1 + diff
     selection2 = selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)][:n_dist]
     selection1 = selection1[:selection2.shape[-1]]
-    #return (selection1.shape[-1] - count_non_shared(dist1[selection1], dist2[selection2], thresholds)) / n_dist
     return count_shared(dist1[selection1], dist2[selection2], thresholds) / n_dist
 
 
@@ -139,7 +142,7 @@ def align(
         dist2 = dist2[::scale, ::scale]
         seq1 = seq1[::scale]
         seq2 = seq2[::scale]
-    
+
     selection = (dist1 < r0) & (dist1 != 0)
     n_total_dist = np.count_nonzero(selection, axis=0)
     n_total_dist[n_total_dist == 0] = 1
@@ -149,7 +152,7 @@ def align(
     n_total_dist2[n_total_dist2 == 0] = 1
 
     selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
-    
+
     # fill in table
     for i in range(0, l1):
         for j in range(0, l2):
@@ -183,7 +186,7 @@ def align(
     alignment1, alignment2, pipes, path = traceback(
         trace, seq1, seq2, trace.shape[0] - 1, trace.shape[1] - 1
     )
-    
+
     if scale > 1:
         path = ndimage.binary_dilation(path, iterations=3)
         path = np.kron(path, np.ones((scale, scale)))
@@ -253,11 +256,11 @@ def run_db(args):
         print(e)
 
     decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
-    
+
     with open(args.ref, "rb") as f:
         ref_data = pickle.load(f)
     path = None
-    
+
     for name, (ref_seq, ref_distances) in ref_data.items():
 
         lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args)
