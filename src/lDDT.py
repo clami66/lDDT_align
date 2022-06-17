@@ -97,19 +97,19 @@ def traceback(trace, seq1, seq2, i, j):
     return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
-@jit
+@jit(nopython=True)
 def count_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) < threshold
     return np.count_nonzero(distance_diff)
 
 
-@jit
+@jit(nopython=True)
 def count_non_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) > threshold
     return np.count_nonzero(distance_diff)
 
 
-@jit
+@jit(nopython=True)
 def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     selection2 = selection1 + diff
     selection2 = selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)][:n_dist]
@@ -117,11 +117,12 @@ def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     return count_shared(dist1[selection1], dist2[selection2], thresholds) / n_dist
 
 
-def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):   
+@jit(nopython=True)
+def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
     local_lddt = np.zeros((l1, l2))
     table = np.zeros((l1, l2))
     trace = np.zeros((l1, l2))
-    
+
     selection = (dist1 < r0) & (dist1 != 0)
     n_total_dist = np.count_nonzero(selection, axis=0)
     n_total_dist[n_total_dist == 0] = 1
