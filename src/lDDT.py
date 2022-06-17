@@ -101,12 +101,16 @@ def count_shared(dist1, dist2, threshold):
     return np.count_nonzero(distance_diff)
 
 
+def count_non_shared(dist1, dist2, threshold):
+    distance_diff = np.abs(dist1 - dist2) > threshold
+    return np.count_nonzero(distance_diff)
+
+
 def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     selection2 = selection1 + diff
     selection2 = selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)][:n_dist]
     selection1 = selection1[:selection2.shape[-1]]
-    #if diff == 1:
-    #    print(count_shared(dist1[selection1], dist2[selection2], thresholds))
+    #return (selection1.shape[-1] - count_non_shared(dist1[selection1], dist2[selection2], thresholds)) / n_dist
     return count_shared(dist1[selection1], dist2[selection2], thresholds) / n_dist
 
 
@@ -140,8 +144,11 @@ def align(
     n_total_dist = np.count_nonzero(selection, axis=0)
     n_total_dist[n_total_dist == 0] = 1
 
+    selection2 = (dist2 < r0) & (dist2 != 0)
+    n_total_dist2 = np.count_nonzero(selection2, axis=0)
+    n_total_dist2[n_total_dist2 == 0] = 1
+
     selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
-    dist2[dist2 == 0] = max(thresholds) + 1
     
     # fill in table
     for i in range(0, l1):
@@ -151,17 +158,15 @@ def align(
                 insert = table[i, j - 1] - gap_pen if j > 0 else -gap_pen
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
-            
-                local_lddt[i, j] = score_match(
-                    dist1[i],
-                    dist2[j],
-                    j - i,
-                    selection_i[i],
-                    thresholds[0],
-                    n_total_dist[i],)
-                match += local_lddt[i, j]
-                #match += score_matches[i,j] / n_total_dist[i]
-                #score_matches2[i,j] = local_lddt[i, j] * n_total_dist[i]
+                if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
+                    local_lddt[i, j] = score_match(
+                        dist1[i],
+                        dist2[j],
+                        j - i,
+                        selection_i[i],
+                        thresholds[0],
+                        n_total_dist[i],)
+                    match += local_lddt[i, j]
                 if match > insert and match > delete:
                     table[i, j] = match
                     trace[i, j] = 0
