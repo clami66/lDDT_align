@@ -8,6 +8,7 @@ from Bio import PDB
 from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1
 from scipy import ndimage
+from numpy.lib.stride_tricks import sliding_window_view
 
 def cache_distances(pdb, atom_type="CA"):
 
@@ -118,7 +119,9 @@ def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
 
 
 @jit(nopython=True)
-def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
+def fill_table(dist1, dist2, thresholds, r0, gap_pen, path):
+    l1 = dist1.shape[0]
+    l2 = dist2.shape[0]    
     local_lddt = np.zeros((l1, l2))
     table = np.zeros((l1, l2))
     trace = np.zeros((l1, l2))
@@ -144,14 +147,15 @@ def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
                 if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
-                    local_lddt[i, j] = score_match(
-                        dist1[i],
-                        dist2[j],
-                        j - i,
-                        selection_i[i],
-                        threshold,
-                        n_total_dist[i],)
-                    match += local_lddt[i, j]
+                    for threshold in thresholds:
+                        local_lddt[i, j] += score_match(
+                            dist1[i],
+                            dist2[j],
+                            j - i,
+                            selection_i[i],
+                            threshold,
+                            n_total_dist[i],)
+                    match += local_lddt[i, j] / len(thresholds)
                 if match > insert and match > delete:
                     table[i, j] = match
                     trace[i, j] = 0
@@ -166,6 +170,56 @@ def fill_table(dist1, dist2, l1, l2, threshold, r0, gap_pen, path):
     return table, trace, global_lddt
 
 
+def fill_table2(dist1, dist2, threshold, r0, gap_pen, path):
+    l1 = dist1.shape[0]
+    l2 = dist2.shape[0]
+    local_lddt = np.zeros((l1, l2))
+    table = np.zeros((l1, l2))
+    trace = np.zeros((l1, l2))
+
+    selection = (dist1 < r0) & (dist1 != 0)
+    deselection = (dist1 > r0) | (dist1 == 0)
+
+    n_total_dist = np.count_nonzero(selection, axis=0)
+    n_total_dist[n_total_dist == 0] = 1
+
+    dist2_pad = np.pad(dist2, (0, l1-1))
+    dist2_pad[l2:,l2:] = dist2[:l1-1,:l1-1]
+    
+    dist2_pad = sliding_window_view(dist2_pad, (l1, l1))
+    dist2_pad = np.diagonal(dist2_pad)
+    dist1[deselection] = 10000
+    
+    diff = np.abs(dist1[:,:,np.newaxis] - dist2_pad)
+    local_lddt = np.count_nonzero(diff < threshold, axis=0)/n_total_dist[:,np.newaxis]
+
+    for i in range(0, l1):
+        for j in range(0, l2):
+            # if a previous rough path has been established, fill only around that
+            if path[i, j] if path is not None else True:
+                delete = table[i - 1, j] if i > 0 else -gap_pen
+                delete -= gap_pen if i > 0 and not trace[i - 1, j] else 0
+                insert = table[i, j - 1] if j > 0 else -gap_pen
+                insert -= gap_pen if j > 0 and not trace[i, j - 1] else 0
+
+                match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
+                match += local_lddt[i, j-i] if j >= i else local_lddt[i, l2 - (i-j)]
+                if match > insert and match > delete:
+                    table[i, j] = match
+                    trace[i, j] = 0
+                elif insert > delete:
+                    table[i, j] = insert
+                    trace[i, j] = 1
+                else:
+                    table[i, j] = delete
+                    trace[i, j] = 2
+
+    # lddt is normalized by the query length
+    global_lddt = table[-1, -1] / l2
+    return table, trace, global_lddt
+
+
+
 def align(
     dist1,
     dist2,
@@ -176,11 +230,10 @@ def align(
     gap_pen=0,
     scale=1,
     path=None,
+    align_func=fill_table,
 ):
-    l1_orig = dist1.shape[-1]
-    l2_orig = dist2.shape[-1]
-    l1 = l1_orig // scale
-    l2 = l2_orig // scale
+    l1 = dist1.shape[-1]
+    l2 = dist2.shape[-1]
 
     # downscale structures
     dist1 = dist1[::scale, ::scale]
@@ -189,7 +242,7 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    table, trace, global_lddt = fill_table(dist1, dist2, l1, l2, thresholds[0], r0, gap_pen, path)
+    table, trace, global_lddt = align_func(dist1, dist2, np.array(thresholds), r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
         trace, seq1, seq2, trace.shape[0] - 1, trace.shape[1] - 1
     )
@@ -198,11 +251,6 @@ def align(
         path = ndimage.binary_dilation(path, iterations=3)
         path = np.kron(path, np.ones((scale, scale)))
 
-        path = np.pad(
-            path,
-            ((0, l1_orig - path.shape[0]), (0, l2_orig - path.shape[1])),
-            "maximum",
-        )
     return global_lddt, (alignment1, alignment2, pipes), path
 
 
@@ -218,6 +266,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             r0=args.r0,
             scale=args.scale,
             gap_pen=args.gap_pen,
+            align_func=fill_table
         )
     else:
         path = None
@@ -232,6 +281,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
         r0=args.r0,
         path=path,
         gap_pen=args.gap_pen,
+        align_func=fill_table
     )
 
     return lddt, alignments    
