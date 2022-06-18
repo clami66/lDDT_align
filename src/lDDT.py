@@ -170,7 +170,7 @@ def fill_table(dist1, dist2, thresholds, r0, gap_pen, path):
     return table, trace, global_lddt
 
 
-def fill_table2(dist1, dist2, threshold, r0, gap_pen, path):
+def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
     l1 = dist1.shape[0]
     l2 = dist2.shape[0]
     local_lddt = np.zeros((l1, l2))
