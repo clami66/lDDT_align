@@ -54,25 +54,29 @@ def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
     return lddt
 
 
-def traceback(trace, seq1, seq2, i, j):
+def traceback(trace, seq1, seq2):
     aln1 = ""
     aln2 = ""
     pipes = ""
-    i = trace.shape[0] - 1
-    j = trace.shape[1] - 1
+    i = len(trace) - 1
+    j = len(trace[0]) - 1
+
     upper_band = j - i
     lower_band = j - i
     path = np.zeros((i + 1, j + 1))
     path[i - 1, j - 1] = 1
+    trace_i = trace[i]
     while i >= 0 if j > i else j >= 0:
+        
         while j >= 0 if i > j else i >= 0:
-            if trace[i, j] == 0:
+            if trace_i[j] == 0:
                 aln1 += seq1[i]
                 aln2 += seq2[j]
                 pipes += ":"
                 i -= 1
                 j -= 1
-            elif trace[i, j] == 1:
+                trace_i = trace[i]
+            elif trace_i[j] == 1:
                 aln1 += "-"
                 aln2 += seq2[j]
                 pipes += " "
@@ -82,6 +86,7 @@ def traceback(trace, seq1, seq2, i, j):
                 aln2 += "-"
                 pipes += " "
                 i -= 1
+                trace_i = trace[i]
             path[i, j] = 1
         while i >= 0:
             aln1 += seq1[i]
@@ -98,19 +103,21 @@ def traceback(trace, seq1, seq2, i, j):
     return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
-@jit(nopython=True)
+#@jit(nopython=True)
+@profile
 def count_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) < threshold
     return np.count_nonzero(distance_diff)
 
 
-@jit(nopython=True)
+#@jit(nopython=True)
 def count_non_shared(dist1, dist2, threshold):
     distance_diff = np.abs(dist1 - dist2) > threshold
     return np.count_nonzero(distance_diff)
 
 
-@jit(nopython=True)
+#@jit(nopython=True)
+@profile
 def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     selection2 = selection1 + diff
     selection2 = selection2[(selection2 < dist2.shape[-1]) & (selection2 >= 0)][:n_dist]
@@ -118,15 +125,22 @@ def score_match(dist1, dist2, diff, selection1, thresholds, n_dist):
     return count_shared(dist1[selection1], dist2[selection2], thresholds) / n_dist
 
 
-@jit(nopython=True)
+#@jit(nopython=True)
+@profile
 def fill_table(dist1, dist2, thresholds, r0, gap_pen, path):
     l1 = dist1.shape[0]
     l2 = dist2.shape[0]    
     local_lddt = np.zeros((l1, l2))
-    table = np.zeros((l1, l2))
-    trace = np.zeros((l1, l2))
-
+    #table = np.zeros((l1, l2))
+    #trace = np.zeros((l1, l2))
+    table = [[0 for j in range(l2)] for i in range(l1)]
+    trace = [[0 for j in range(l2)] for i in range(l1)]
+    n_thr = len(thresholds)
     selection = (dist1 < r0) & (dist1 != 0)
+    for i in range(5):
+        np.fill_diagonal(selection[:,i:], False)
+        np.fill_diagonal(selection[i:,:], False)
+
     n_total_dist = np.count_nonzero(selection, axis=0)
     n_total_dist[n_total_dist == 0] = 1
 
@@ -134,40 +148,43 @@ def fill_table(dist1, dist2, thresholds, r0, gap_pen, path):
     n_total_dist2 = np.count_nonzero(selection2, axis=0)
     n_total_dist2[n_total_dist2 == 0] = 1
 
-    selection_i = [np.where(selection[i, :])[0] for i in range(l1)]
+    selections = [np.where(selection[i, :])[0] for i in range(l1)]
 
     for i in range(0, l1):
+        n_total_dist_i = n_total_dist[i]
+        selection_i = selections[i]
+        dist1_i = dist1[i]
+        
+        trace_i = trace[i]
+        table_i_1 = table[i-1]
+        table_i = table[i]
         for j in range(0, l2):
             # if a previous rough path has been established, fill only around that
-            if path[i, j] if path is not None else True:
-                delete = table[i - 1, j] if i > 0 else -gap_pen
-                delete -= gap_pen if i > 0 and not trace[i - 1, j] else 0
-                insert = table[i, j - 1] if j > 0 else -gap_pen
-                insert -= gap_pen if j > 0 and not trace[i, j - 1] else 0
+            if path is None or path[i, j]:
+                delete = table_i_1[j] if i > 0 else -gap_pen
+                delete -= gap_pen if i > 0 and not trace[i - 1][j] else 0
+                insert = table_i[j - 1] if j > 0 else -gap_pen
+                insert -= gap_pen if j > 0 and not trace_i[j - 1] else 0
 
-                match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
-                if match + n_total_dist2[j]/n_total_dist[i] > delete and match + n_total_dist2[j]/n_total_dist[i] > insert:
+                match = table_i_1[j - 1] if i > 0 and j > 0 else 0
+                if match + n_total_dist2[j]/n_total_dist_i > delete and match + n_total_dist2[j]/n_total_dist_i > insert:
                     for threshold in thresholds:
-                        local_lddt[i, j] += score_match(
-                            dist1[i],
-                            dist2[j],
-                            j - i,
-                            selection_i[i],
-                            threshold,
-                            n_total_dist[i],)
-                    match += local_lddt[i, j] / len(thresholds)
+                        #local_lddt[i, j] += score_match(dist1_i, dist2[j], j - i, selection_i, threshold, n_total_dist_i,)
+                        match += score_match(dist1_i, dist2[j], j - i, selection_i, threshold, n_total_dist_i,) / n_thr
+                    #match += local_lddt[i, j] / n_thr
                 if match > insert and match > delete:
-                    table[i, j] = match
-                    trace[i, j] = 0
+                    table_i[j] = match
+                    trace_i[j] = 0
                 elif insert > delete:
-                    table[i, j] = insert
-                    trace[i, j] = 1
+                    table_i[j] = insert
+                    trace_i[j] = 1
                 else:
-                    table[i, j] = delete
-                    trace[i, j] = 2
+                    table_i[j] = delete
+                    trace_i[j] = 2
+
     # lddt is normalized by the query length
-    global_lddt = table[-1, -1] / l2
-    return table, trace, global_lddt
+    global_lddt = table[-1][-1] / l2
+    return trace, global_lddt
 
 
 def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
@@ -242,9 +259,9 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    table, trace, global_lddt = align_func(dist1, dist2, np.array(thresholds), r0, gap_pen, path)
+    trace, global_lddt = align_func(dist1, dist2, np.array(thresholds), r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
-        trace, seq1, seq2, trace.shape[0] - 1, trace.shape[1] - 1
+        trace, seq1, seq2,
     )
     
     if scale > 1:
