@@ -6,6 +6,7 @@ cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selectio
         int i, l1, l2, sel1, sel2, n_sel
         float c = 0
         float d
+        float tpr
 
     l1 = dist1.shape[0]
     l2 = dist2.shape[0]
@@ -17,7 +18,8 @@ cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selectio
             d = dist1[sel1] - dist2[sel2]
             if d < threshold and d > -threshold:
                 c += 1
-    return c/n_dist
+    tpr = c/n_dist
+    return tpr
 
 
 cdef select(double [:,:] dist, float r0, int l):
@@ -32,14 +34,17 @@ cdef select(double [:,:] dist, float r0, int l):
     return selection
 
 
-def fill_table(double [:,:] dist1, np.ndarray[np.float64_t, ndim=2] dist2, list thresholds, float r0, float gap_pen, np.ndarray[np.uint8_t, ndim=2] path):
+def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0, float gap_pen, np.ndarray[np.uint8_t, ndim=2] path):
     cdef:
         int i, j, n_total_dist_i, diff
         int n_thr = len(thresholds)
         int l1 = dist1.shape[0]
         int l2 = dist2.shape[0]
-        float delete, insert, match, score, global_lddt
+        list selections
+        float delete, insert, match, global_lddt, threshold
+        float score
         double [:, :] table = np.zeros((l1, l2)).astype(np.float64)
+        long [:] selection_i
         unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
         np.ndarray[np.int_t, ndim=1] n_total_dist
         np.ndarray[np.float64_t, ndim=1] n_total_dist2
