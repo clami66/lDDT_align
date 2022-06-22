@@ -34,7 +34,7 @@ cdef select(double [:,:] dist, float r0, int l):
     return selection
 
 
-def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0, float gap_pen, np.ndarray[np.uint8_t, ndim=2] path):
+def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
     cdef:
         int i, j, n_total_dist_i, diff
         int n_thr = len(thresholds)
@@ -43,18 +43,20 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
         list selections
         float delete, insert, match, global_lddt, threshold
         float score
-        double [:, :] table = np.zeros((l1, l2)).astype(np.float64)
+        float [:, :] table = np.zeros((l1, l2)).astype(np.float32)
         long [:] selection_i
         unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
-        np.ndarray[np.int_t, ndim=1] n_total_dist
-        np.ndarray[np.float64_t, ndim=1] n_total_dist2
+        long [:] n_total_dist
         unsigned char [:,:] selection
         double [:] dist1_i
 
     selection = select(dist1, r0, l1)
 
     n_total_dist = np.count_nonzero(selection, axis=0).astype(np.int)
-    n_total_dist[n_total_dist == 0] = 1
+    #n_total_dist[n_total_dist == 0] = 1
+    for i in range(l1):
+        if n_total_dist[i] == 0:
+            n_total_dist[i] = 1
 
     selections = [np.where(selection[i, :])[0] for i in range(l1)]
 
