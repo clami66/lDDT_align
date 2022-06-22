@@ -64,7 +64,7 @@ def traceback(trace, seq1, seq2):
 
     upper_band = j - i
     lower_band = j - i
-    path = np.zeros((i + 1, j + 1))
+    path = np.zeros((i + 1, j + 1)).astype(np.uint8)
     path[i - 1, j - 1] = 1
     trace_i = trace[i]
     while i >= 0 if j > i else j >= 0:
@@ -176,19 +176,20 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    trace, global_lddt = align_func(dist1, dist2, np.array(thresholds), r0, gap_pen, path)
+    trace, global_lddt = align_func(dist1, dist2, thresholds, r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
         trace, seq1, seq2,
     )
     
     if scale > 1:
         path = ndimage.binary_dilation(path, iterations=3)
-        path = np.kron(path, np.ones((scale, scale)))
+        path = np.kron(path, np.ones((scale, scale))).astype(np.uint8)
 
     return global_lddt, (alignment1, alignment2, pipes), path
 
 
 def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func, args):
+    path = np.ones((ref_distances.shape[0], decoy_distances.shape[0])).astype(np.uint8)
     if args.scale > 1:
         # The initial search is done by scaling down the structure of a factor args.scale
         _, _, path = align(
@@ -198,12 +199,12 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func, a
             decoy_seq,
             thresholds=args.thresholds,
             r0=args.r0,
+            path=path,
             scale=args.scale,
             gap_pen=args.gap_pen,
             align_func=align_func
         )
-    else:
-        path = None
+        
 
     # The second search is full-scale, but follows the neighborhood of the path found in the first search
     lddt, alignments, _ = align(
@@ -325,6 +326,3 @@ def main():
         print(alignments[2])
         print(alignments[1])
 
-
-if __name__ == "__main__":
-    main()
