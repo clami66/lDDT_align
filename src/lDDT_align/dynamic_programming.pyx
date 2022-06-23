@@ -1,7 +1,7 @@
 import numpy as np
 cimport numpy as np
 
-cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
+cdef float score_match(double [:] dist1, double [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
     cdef:
         int i, l1, l2, sel1, sel2, n_sel
         float c = 0
