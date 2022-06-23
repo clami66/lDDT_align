@@ -11,6 +11,10 @@ cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selectio
     l1 = dist1.shape[0]
     l2 = dist2.shape[0]
     n_sel = selection1.shape[0]
+
+    if n_sel == 0:
+        return 1.0
+
     for i in range(n_sel):
         sel1 = selection1[i]
         sel2 = sel1 + diff
@@ -19,6 +23,7 @@ cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selectio
             if d < threshold and d > -threshold:
                 c += 1
     tpr = c/n_dist
+
     return tpr
 
 
@@ -44,6 +49,7 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
         float delete, insert, match, global_lddt, threshold
         float score
         float [:, :] table = np.zeros((l1, l2)).astype(np.float32)
+        float [:, :] local_lddt = np.zeros((l1, l2)).astype(np.float32)
         long [:] selection_i
         long [:] n_total_dist
         unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
@@ -53,7 +59,6 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
     selection = select(dist1, r0, l1)
 
     n_total_dist = np.count_nonzero(selection, axis=0).astype(np.int)
-    #n_total_dist[n_total_dist == 0] = 1
     for i in range(l1):
         if n_total_dist[i] == 0:
             n_total_dist[i] = 1
@@ -78,8 +83,9 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
                     threshold = thresholds[t]
                     diff = j - i
                     score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i,)
-                match = match + score/n_thr
-                if match > insert and match > delete:
+                local_lddt[i, j] = score/n_thr
+                match = match + local_lddt[i,j]
+                if match >= insert and match >= delete:
                     table[i, j] = match
                     trace[i, j] = 0
                 elif insert > delete:
