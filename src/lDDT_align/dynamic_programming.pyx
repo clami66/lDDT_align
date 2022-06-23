@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as np
+from cython.view cimport array as cvarray
 
 cdef float score_match(double [:] dist1, double [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
     cdef:
@@ -50,6 +51,12 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
         unsigned char [:,:] selection
         double [:] dist1_i
 
+    # A copy of the thresholds list as an array so that it can be accessed quicker
+    thresholds_array = cvarray(shape=(n_thr, ), itemsize=sizeof(float), format="f")
+    cdef float [:] thresholds_view = thresholds_array
+    for t in range(n_thr):
+        thresholds_view[t] = thresholds[t]
+
     selection = select(dist1, r0, l1)
 
     n_total_dist = np.count_nonzero(selection, axis=0).astype(np.int)
@@ -75,7 +82,7 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
                 match = table[i-1, j - 1] if i > 0 and j > 0 else 0
                 score = 0
                 for t in range(n_thr):
-                    threshold = thresholds[t]
+                    threshold = thresholds_view[t]
                     diff = j - i
                     score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i,)
                 match = match + score/n_thr
