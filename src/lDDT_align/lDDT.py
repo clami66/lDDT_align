@@ -3,7 +3,6 @@
 import argparse
 import pickle
 import numpy as np
-from numba import jit
 from Bio import PDB
 from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1

@@ -36,7 +36,7 @@ cdef select(double [:,:] dist, float r0, int l):
 
 def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
     cdef:
-        int i, j, n_total_dist_i, diff
+        int i, j, t, n_total_dist_i, diff
         int n_thr = len(thresholds)
         int l1 = dist1.shape[0]
         int l2 = dist2.shape[0]
@@ -45,8 +45,8 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
         float score
         float [:, :] table = np.zeros((l1, l2)).astype(np.float32)
         long [:] selection_i
-        unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
         long [:] n_total_dist
+        unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
         unsigned char [:,:] selection
         double [:] dist1_i
 
