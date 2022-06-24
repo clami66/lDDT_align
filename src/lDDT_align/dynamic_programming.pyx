@@ -1,17 +1,18 @@
 import numpy as np
 cimport numpy as np
+from cython.view cimport array as cvarray
 
 def traceback(unsigned char [:, :] trace, str seq1, str seq2):
     cdef:
         str aln1 = ""
         str aln2 = ""
         str pipes = ""
-        int i = len(trace) - 1
-        int j = len(trace[0]) - 1
+        int i = trace.shape[0] - 1
+        int j = trace.shape[1] - 1
 
         int upper_band = j - i
         int lower_band = j - i
-        unsigned char [:,:] path = np.zeros((i + 1, j + 1)).astype(np.uint8)
+        unsigned char [:,:] path = np.zeros((trace.shape[0], trace.shape[1])).astype(np.uint8)
         unsigned char [:] trace_i
 
     path[i - 1, j - 1] = 1
@@ -20,40 +21,40 @@ def traceback(unsigned char [:, :] trace, str seq1, str seq2):
         
         while j >= 0 if i > j else i >= 0:
             if trace_i[j] == 0:
-                aln1 += seq1[i]
-                aln2 += seq2[j]
-                pipes += ":"
+                aln1 = seq1[i] + aln1
+                aln2 = seq2[j] + aln2
+                pipes = ":" + pipes
                 i -= 1
                 j -= 1
                 trace_i = trace[i]
             elif trace_i[j] == 1:
-                aln1 += "-"
-                aln2 += seq2[j]
-                pipes += " "
+                aln1 = "-" + aln1
+                aln2 = seq2[j] + aln2
+                pipes = " " + pipes
                 j -= 1
             else:
-                aln1 += seq1[i]
-                aln2 += "-"
-                pipes += " "
+                aln1 = seq1[i] + aln1
+                aln2 = "-" + aln2
+                pipes = " " + pipes
                 i -= 1
                 trace_i = trace[i]
             path[i, j] = 1
         while i >= 0:
-            aln1 += seq1[i]
-            aln2 += "-"
-            pipes += " "
+            aln1 = seq1[i] + aln1
+            aln2 = "-" + aln2
+            pipes = " " + pipes
             i -= 1
             path[i, j] = 1
         while j >= 0:
-            aln2 += seq2[j]
-            aln1 += "-"
-            pipes += " "
+            aln2 = seq2[j] + aln2
+            aln1 = "-" + aln1
+            pipes = " " + pipes
             j -= 1
             path[i, j] = 1
-    return aln1[::-1], aln2[::-1], pipes[::-1], path
+    return aln1, aln2, pipes, path
 
 
-cdef score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
+cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
     cdef:
         int i, l1, l2, sel1, sel2, n_sel
         float c = 0
@@ -108,6 +109,12 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         unsigned char [:,:] selection
         float [:] dist1_i
 
+    # A copy of the thresholds list as an array so that it can be accessed quicker
+    thresholds_array = cvarray(shape=(n_thr, ), itemsize=sizeof(float), format="f")
+    cdef float [:] thresholds_view = thresholds_array
+    for t in range(n_thr):
+        thresholds_view[t] = thresholds[t]
+
     selection = select(dist1, r0, l1)
 
     n_total_dist = np.count_nonzero(selection, axis=0).astype(np.int)
@@ -132,7 +139,7 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
                 match = table[i-1, j - 1] if i > 0 and j > 0 else 0
                 score = 0
                 for t in range(n_thr):
-                    threshold = thresholds[t]
+                    threshold = thresholds_view[t]
                     diff = j - i
                     score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i,)
                 local_lddt[i, j] = score/n_thr

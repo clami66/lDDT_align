@@ -10,7 +10,6 @@ from scipy import ndimage
 from numpy.lib.stride_tricks import sliding_window_view
 from .dynamic_programming import fill_table, traceback
 
-#@profile
 def cache_distances(pdb, atom_type="CA"):
 
     backbone_ids = ["N", "CA", "C", "O"]
@@ -44,7 +43,6 @@ def cache_distances(pdb, atom_type="CA"):
     return sequence, distances
 
 
-#@profile
 def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
 
     selection = (dist1 < r0) & (dist1 != 0)
@@ -105,7 +103,6 @@ def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
     return table, trace, global_lddt
 
 
-#@profile
 def align(
     dist1,
     dist2,
@@ -139,7 +136,6 @@ def align(
     return global_lddt, (alignment1, alignment2, pipes), path
 
 
-#@profile
 def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
     path = np.ones((ref_distances.shape[0], decoy_distances.shape[0])).astype(np.uint8)
     if args.scale > 1:
