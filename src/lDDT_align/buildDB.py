@@ -39,7 +39,7 @@ def cache_distances(pdb, atom_type="CA"):
     distances[np.where(np.sum(coords, axis=1) == 0), :] = distances[
         :, np.where(np.sum(coords, axis=1) == 0)
     ] = 0
-
+    distances = distances.astype(np.float32)
     return sequence, distances
 
 

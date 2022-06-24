@@ -1,7 +1,59 @@
 import numpy as np
 cimport numpy as np
 
-cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
+def traceback(unsigned char [:, :] trace, str seq1, str seq2):
+    cdef:
+        str aln1 = ""
+        str aln2 = ""
+        str pipes = ""
+        int i = len(trace) - 1
+        int j = len(trace[0]) - 1
+
+        int upper_band = j - i
+        int lower_band = j - i
+        unsigned char [:,:] path = np.zeros((i + 1, j + 1)).astype(np.uint8)
+        unsigned char [:] trace_i
+
+    path[i - 1, j - 1] = 1
+    trace_i = trace[i]
+    while i >= 0 if j > i else j >= 0:
+        
+        while j >= 0 if i > j else i >= 0:
+            if trace_i[j] == 0:
+                aln1 += seq1[i]
+                aln2 += seq2[j]
+                pipes += ":"
+                i -= 1
+                j -= 1
+                trace_i = trace[i]
+            elif trace_i[j] == 1:
+                aln1 += "-"
+                aln2 += seq2[j]
+                pipes += " "
+                j -= 1
+            else:
+                aln1 += seq1[i]
+                aln2 += "-"
+                pipes += " "
+                i -= 1
+                trace_i = trace[i]
+            path[i, j] = 1
+        while i >= 0:
+            aln1 += seq1[i]
+            aln2 += "-"
+            pipes += " "
+            i -= 1
+            path[i, j] = 1
+        while j >= 0:
+            aln2 += seq2[j]
+            aln1 += "-"
+            pipes += " "
+            j -= 1
+            path[i, j] = 1
+    return aln1[::-1], aln2[::-1], pipes[::-1], path
+
+
+cdef score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
     cdef:
         int i, l1, l2, sel1, sel2, n_sel
         float c = 0
@@ -27,7 +79,7 @@ cdef score_match(double [:] dist1, double [:] dist2, int diff, long [:] selectio
     return tpr
 
 
-cdef select(double [:,:] dist, float r0, int l):
+cdef select(float [:,:] dist, float r0, int l):
     cdef:
         int i, j
         unsigned char [:,:] selection = np.zeros((l, l)).astype(np.uint8)
@@ -39,7 +91,7 @@ cdef select(double [:,:] dist, float r0, int l):
     return selection
 
 
-def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
+def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
     cdef:
         int i, j, t, n_total_dist_i, diff
         int n_thr = len(thresholds)
@@ -54,7 +106,7 @@ def fill_table(double [:,:] dist1, double [:,:] dist2, list thresholds, float r0
         long [:] n_total_dist
         unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
         unsigned char [:,:] selection
-        double [:] dist1_i
+        float [:] dist1_i
 
     selection = select(dist1, r0, l1)
 

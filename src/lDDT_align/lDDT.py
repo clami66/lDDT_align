@@ -8,8 +8,9 @@ from Bio.PDB import PDBParser
 from Bio.SeqUtils import seq1
 from scipy import ndimage
 from numpy.lib.stride_tricks import sliding_window_view
-from . import dynamic_programming
+from .dynamic_programming import fill_table, traceback
 
+#@profile
 def cache_distances(pdb, atom_type="CA"):
 
     backbone_ids = ["N", "CA", "C", "O"]
@@ -35,7 +36,7 @@ def cache_distances(pdb, atom_type="CA"):
 
     distances = np.sqrt(
         np.sum((coords[:, np.newaxis, :] - coords[np.newaxis, :, :]) ** 2, axis=2)
-    )
+    ).astype(np.float32)
     distances[np.where(np.sum(coords, axis=1) == 0), :] = distances[
         :, np.where(np.sum(coords, axis=1) == 0)
     ] = 0
@@ -43,6 +44,7 @@ def cache_distances(pdb, atom_type="CA"):
     return sequence, distances
 
 
+#@profile
 def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
 
     selection = (dist1 < r0) & (dist1 != 0)
@@ -52,55 +54,6 @@ def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
     lddt = distance_difference(dist1[selection], dist2[selection], thresholds)
 
     return lddt
-
-
-def traceback(trace, seq1, seq2):
-    aln1 = ""
-    aln2 = ""
-    pipes = ""
-    i = len(trace) - 1
-    j = len(trace[0]) - 1
-
-    upper_band = j - i
-    lower_band = j - i
-    path = np.zeros((i + 1, j + 1)).astype(np.uint8)
-    path[i - 1, j - 1] = 1
-    trace_i = trace[i]
-    while i >= 0 if j > i else j >= 0:
-        
-        while j >= 0 if i > j else i >= 0:
-            if trace_i[j] == 0:
-                aln1 += seq1[i]
-                aln2 += seq2[j]
-                pipes += ":"
-                i -= 1
-                j -= 1
-                trace_i = trace[i]
-            elif trace_i[j] == 1:
-                aln1 += "-"
-                aln2 += seq2[j]
-                pipes += " "
-                j -= 1
-            else:
-                aln1 += seq1[i]
-                aln2 += "-"
-                pipes += " "
-                i -= 1
-                trace_i = trace[i]
-            path[i, j] = 1
-        while i >= 0:
-            aln1 += seq1[i]
-            aln2 += "-"
-            pipes += " "
-            i -= 1
-            path[i, j] = 1
-        while j >= 0:
-            aln2 += seq2[j]
-            aln1 += "-"
-            pipes += " "
-            j -= 1
-            path[i, j] = 1
-    return aln1[::-1], aln2[::-1], pipes[::-1], path
 
 
 def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
@@ -152,7 +105,7 @@ def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
     return table, trace, global_lddt
 
 
-
+#@profile
 def align(
     dist1,
     dist2,
@@ -163,7 +116,6 @@ def align(
     gap_pen=0,
     scale=1,
     path=None,
-    align_func=dynamic_programming.fill_table,
 ):
     l1 = dist1.shape[-1]
     l2 = dist2.shape[-1]
@@ -175,19 +127,20 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    trace, global_lddt = align_func(dist1, dist2, thresholds, r0, gap_pen, path)
+    trace, global_lddt = fill_table(dist1, dist2, thresholds, r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
         trace, seq1, seq2,
     )
     
     if scale > 1:
-        path = ndimage.binary_dilation(path, iterations=3)
+        path = ndimage.binary_dilation(path, iterations=2)
         path = np.kron(path, np.ones((scale, scale))).astype(np.uint8)
 
     return global_lddt, (alignment1, alignment2, pipes), path
 
 
-def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func, args):
+#@profile
+def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
     path = np.ones((ref_distances.shape[0], decoy_distances.shape[0])).astype(np.uint8)
     if args.scale > 1:
         # The initial search is done by scaling down the structure of a factor args.scale
@@ -201,7 +154,6 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func, a
             path=path,
             scale=args.scale,
             gap_pen=args.gap_pen,
-            align_func=align_func
         )
         
 
@@ -215,7 +167,6 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func, a
         r0=args.r0,
         path=path,
         gap_pen=args.gap_pen,
-        align_func=align_func
     )
 
     return lddt, alignments    
@@ -235,8 +186,9 @@ def run(args):
     decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
     ref_seq, ref_distances = cache_distances(ref, atom_type=args.atom_type)
     
-    lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func=dynamic_programming.fill_table,  args=args)
+    lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances,  args=args)
     return lddt, alignments
+
 
 def run_db(args):
 
@@ -255,12 +207,13 @@ def run_db(args):
 
     for name, (ref_seq, ref_distances) in ref_data.items():
 
-        lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, align_func=dynamic_programming.fill_table, args=args)
+        lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args=args)
 
         print(f"Reference: {name}")
         print(f"Query: {args.query}")
         print(f"Global lDDT score: {lddt}")
     return
+
 
 def main():
 
