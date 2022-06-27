@@ -140,7 +140,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
     path = np.ones((ref_distances.shape[0], decoy_distances.shape[0])).astype(np.uint8)
     if args.scale > 1:
         # The initial search is done by scaling down the structure of a factor args.scale
-        _, _, path = align(
+        lddt, alignments, path = align(
             ref_distances,
             decoy_distances,
             ref_seq,
@@ -152,18 +152,18 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             gap_pen=args.gap_pen,
         )
         
-
-    # The second search is full-scale, but follows the neighborhood of the path found in the first search
-    lddt, alignments, _ = align(
-        ref_distances,
-        decoy_distances,
-        ref_seq,
-        decoy_seq,
-        thresholds=args.thresholds,
-        r0=args.r0,
-        path=path,
-        gap_pen=args.gap_pen,
-    )
+    if lddt > args.prefilter:
+        # The second search is full-scale, but follows the neighborhood of the path found in the first search
+        lddt, alignments, _ = align(
+            ref_distances,
+            decoy_distances,
+            ref_seq,
+            decoy_seq,
+            thresholds=args.thresholds,
+            r0=args.r0,
+            path=path,
+            gap_pen=args.gap_pen,
+        )
 
     return lddt, alignments    
 
@@ -251,6 +251,14 @@ def main():
         default=3,
         type=int,
         help="Scale factor for the initial alignment (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--prefilter",
+        "-f",
+        dest="prefilter",
+        default=0.3,
+        type=float,
+        help="Minimum scaled lDDT score to calculate lDDT on full-scale protein (default: %(default)s)",
     )
     parser.add_argument(
         "--gap-penalty",

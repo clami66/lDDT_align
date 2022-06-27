@@ -154,6 +154,6 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
                     table[i, j] = delete
                     trace[i, j] = 2
 
-    # lddt is normalized by the query length
-    global_lddt = table[l1-1, l2-1] / l2
+    # lddt is normalized by the reference length
+    global_lddt = table[l1-1, l2-1] / l1
     return trace, global_lddt
