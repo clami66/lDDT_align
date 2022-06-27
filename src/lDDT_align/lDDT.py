@@ -2,6 +2,7 @@
 
 import argparse
 import pickle
+from os.path import basename
 import numpy as np
 from Bio import PDB
 from Bio.PDB import PDBParser
@@ -174,12 +175,12 @@ def run(args):
         parser = PDBParser()
 
         ref = parser.get_structure("reference", args.ref)[0]
-        decoy = parser.get_structure("decoy", args.query)[0]
+        query = parser.get_structure("query", args.query)[0]
 
     except Exception as e:
         print(e)
 
-    decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
+    decoy_seq, decoy_distances = cache_distances(query, atom_type=args.atom_type)
     ref_seq, ref_distances = cache_distances(ref, atom_type=args.atom_type)
     
     lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances,  args=args)
@@ -190,24 +191,22 @@ def run_db(args):
 
     try:
         parser = PDBParser()
-        decoy = parser.get_structure("decoy", args.query)[0]
+        query = parser.get_structure("query", args.query)[0]
 
     except Exception as e:
         print(e)
 
-    decoy_seq, decoy_distances = cache_distances(decoy, atom_type=args.atom_type)
-
+    decoy_seq, decoy_distances = cache_distances(query, atom_type=args.atom_type)
+    query_name = basename(args.query)
     with open(args.ref, "rb") as f:
         ref_data = pickle.load(f)
     path = None
-
-    for name, (ref_seq, ref_distances) in ref_data.items():
+    print("Reference Target lDDT")
+    for ref_name, (ref_seq, ref_distances) in ref_data.items():
 
         lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args=args)
 
-        print(f"Reference: {name}")
-        print(f"Query: {args.query}")
-        print(f"Global lDDT score: {lddt}")
+        print(f"{ref_name} {query_name} {lddt:.3f}")
     return
 
 

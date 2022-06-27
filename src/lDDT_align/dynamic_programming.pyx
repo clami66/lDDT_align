@@ -1,6 +1,8 @@
+#cython: language_level=3
 import numpy as np
 cimport numpy as np
 from cython.view cimport array as cvarray
+import cython
 
 def traceback(unsigned char [:, :] trace, str seq1, str seq2):
     cdef:
@@ -12,7 +14,7 @@ def traceback(unsigned char [:, :] trace, str seq1, str seq2):
 
         int upper_band = j - i
         int lower_band = j - i
-        unsigned char [:,:] path = np.zeros((trace.shape[0], trace.shape[1])).astype(np.uint8)
+        unsigned char [:,:] path = np.zeros((trace.shape[0], trace.shape[1]), dtype=np.uint8)
         unsigned char [:] trace_i
 
     path[i - 1, j - 1] = 1
@@ -54,6 +56,9 @@ def traceback(unsigned char [:, :] trace, str seq1, str seq2):
     return aln1, aln2, pipes, path
 
 
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
     cdef:
         int i, l1, l2, sel1, sel2, n_sel
@@ -83,7 +88,7 @@ cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] sele
 cdef select(float [:,:] dist, float r0, int l):
     cdef:
         int i, j
-        unsigned char [:,:] selection = np.zeros((l, l)).astype(np.uint8)
+        unsigned char [:,:] selection = np.zeros((l, l), dtype=np.uint8)
     
     for i in range(l):
         for j in range(i+5, l):
@@ -92,20 +97,23 @@ cdef select(float [:,:] dist, float r0, int l):
     return selection
 
 
+@cython.cdivision(True)
 def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
     cdef:
-        int i, j, t, n_total_dist_i, diff
+        int i, j, t, n_total_dist_i, diff, i_1, j_1
         int n_thr = len(thresholds)
         int l1 = dist1.shape[0]
         int l2 = dist2.shape[0]
+        int l1_1 = l1 - 1
+        int l2_1 = l2 - 1
         list selections
         float delete, insert, match, global_lddt, threshold
         float score
-        float [:, :] table = np.zeros((l1, l2)).astype(np.float32)
-        float [:, :] local_lddt = np.zeros((l1, l2)).astype(np.float32)
+        float [:, :] table = np.zeros((l1, l2), dtype=np.float32)
+        float [:, :] local_lddt = np.zeros((l1, l2), dtype=np.float32)
         long [:] selection_i
         long [:] n_total_dist
-        unsigned char [:, :] trace = np.zeros((l1, l2)).astype(np.uint8)
+        unsigned char [:, :] trace = np.zeros((l1, l2), dtype=np.uint8)
         unsigned char [:,:] selection
         float [:] dist1_i
 
@@ -128,22 +136,24 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         n_total_dist_i = n_total_dist[i]
         selection_i = selections[i]
         dist1_i = dist1[i]
+        i_1 = i - 1
         for j in range(0, l2):            
+            j_1 = j - 1
             # if a previous rough path has been established, fill only around that
             if path[i, j]:
-                delete = table[i-1, j] if i > 0 else -gap_pen
-                delete -= gap_pen if i > 0 and not trace[i - 1, j] else 0
-                insert = table[i, j - 1] if j > 0 else -gap_pen
-                insert -= gap_pen if j > 0 and not trace[i, j - 1] else 0
+                delete = table[i_1, j] if i > 0 else -gap_pen
+                delete -= gap_pen if i > 0 and not trace[i_1, j] else 0
+                insert = table[i, j_1] if j > 0 else -gap_pen
+                insert -= gap_pen if j > 0 and not trace[i, j_1] else 0
 
-                match = table[i-1, j - 1] if i > 0 and j > 0 else 0
+                match = table[i_1, j_1] if i > 0 and j > 0 else 0
                 score = 0
                 for t in range(n_thr):
                     threshold = thresholds_view[t]
                     diff = j - i
                     score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i,)
                 local_lddt[i, j] = score/n_thr
-                match = match + local_lddt[i,j]
+                match = match + local_lddt[i, j]
                 if match >= insert and match >= delete:
                     table[i, j] = match
                     trace[i, j] = 0
@@ -155,5 +165,5 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
                     trace[i, j] = 2
 
     # lddt is normalized by the reference length
-    global_lddt = table[l1-1, l2-1] / l1
+    global_lddt = table[l1_1, l2_1] / min(l1, l2)
     return trace, global_lddt
