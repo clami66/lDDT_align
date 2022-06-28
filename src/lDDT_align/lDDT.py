@@ -153,7 +153,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             gap_pen=args.gap_pen,
         )
         
-    if lddt > args.prefilter:
+    if args.scale == 1 or lddt > args.prefilter:
         # The second search is full-scale, but follows the neighborhood of the path found in the first search
         lddt, alignments, _ = align(
             ref_distances,

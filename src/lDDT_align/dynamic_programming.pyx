@@ -98,6 +98,8 @@ cdef select(float [:,:] dist, float r0, int l):
 
 
 @cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
     cdef:
         int i, j, t, n_total_dist_i, diff, i_1, j_1
