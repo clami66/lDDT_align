@@ -15,7 +15,7 @@ cd lDDT_align
 python -m pip install .
 ```
 
-### Usage:
+## Usage
 
 ```lDDT_align -h
 usage: lDDT.py [-h] [--thresholds thr [thr ...]] [--inclusion-radius R0] [--atom-type type] [--scale SCALE]
@@ -45,7 +45,7 @@ optional arguments:
 
 ```
 
-Example:
+## Example
 
 Aligning a CASP14 model to the native PDB structure:
 
