@@ -13,7 +13,7 @@ from .dynamic_programming import fill_table, traceback
 
 def cache_distances(pdb, atom_type="CA"):
 
-    backbone_ids = ["N", "CA", "C", "O"]
+    backbone_ids = ["N", "C", "O"]
     model = pdb
     reslist = [_ for _ in model.get_residues() if PDB.is_aa(_)]
     nres = len(reslist)
@@ -125,9 +125,9 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    trace, global_lddt = fill_table(dist1, dist2, thresholds, r0, gap_pen, path)
+    trace, global_lddt, local_lddt = fill_table(dist1, dist2, thresholds, r0, gap_pen, path)
     alignment1, alignment2, pipes, path = traceback(
-        trace, seq1, seq2,
+        trace, local_lddt, seq1, seq2,
     )
     
     if scale > 1:
@@ -213,7 +213,7 @@ def run_db(args):
 def main():
 
     parser = argparse.ArgumentParser(
-        description="Performs structural alignment of two proteins in order to optimize their mutual global lDDT"
+        description="Performs structural alignment of two proteins in order to optimize their mutual lDDT"
     )
     parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
     parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
@@ -224,7 +224,7 @@ def main():
         type=float,
         nargs="+",
         help="List of thresholds for lDDT scoring (default: %(default)s)",
-        default=[2],
+        default=[0.5, 1, 2, 4],
     )
     parser.add_argument(
         "--inclusion-radius",
@@ -247,7 +247,7 @@ def main():
         "--scale",
         "-s",
         dest="scale",
-        default=3,
+        default=1,
         type=int,
         help="Scale factor for the initial alignment (default: %(default)s)",
     )
@@ -273,11 +273,12 @@ def main():
         run_db(args)
     else:
         lddt, alignments = run(args)
-
+        local_lddt = alignments[2].split()
         print(f"Reference: {args.ref}")
         print(f"Query: {args.query}")
-        print(f"Global lDDT score: {lddt}")
-        print(alignments[0])
-        print(alignments[2])
-        print(alignments[1])
+        print(f"Total lDDT score: {lddt}\n")
+        
+        print(f"Ref.\tScore\tQuery")
+        for i in range(len(alignments[0])):
+            print(f"{alignments[0][i]}\t{local_lddt[i][:4]}\t{alignments[1][i]}")
 

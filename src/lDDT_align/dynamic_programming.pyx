@@ -4,7 +4,7 @@ cimport numpy as np
 from cython.view cimport array as cvarray
 import cython
 
-def traceback(unsigned char [:, :] trace, str seq1, str seq2):
+def traceback(unsigned char [:, :] trace, float [:, :] local_lddt, str seq1, str seq2):
     cdef:
         str aln1 = ""
         str aln2 = ""
@@ -19,38 +19,41 @@ def traceback(unsigned char [:, :] trace, str seq1, str seq2):
 
     path[i - 1, j - 1] = 1
     trace_i = trace[i]
+    print(seq1)
+    print(seq2)
+    print(trace.shape)
     while i >= 0 if j > i else j >= 0:
         
         while j >= 0 if i > j else i >= 0:
             if trace_i[j] == 0:
                 aln1 = seq1[i] + aln1
                 aln2 = seq2[j] + aln2
-                pipes = ":" + pipes
+                pipes = " " + str(local_lddt[i, j]) + " " + pipes
                 i -= 1
                 j -= 1
                 trace_i = trace[i]
             elif trace_i[j] == 1:
                 aln1 = "-" + aln1
                 aln2 = seq2[j] + aln2
-                pipes = " " + pipes
+                pipes = " - " + pipes
                 j -= 1
             else:
                 aln1 = seq1[i] + aln1
                 aln2 = "-" + aln2
-                pipes = " " + pipes
+                pipes = " - " + pipes
                 i -= 1
                 trace_i = trace[i]
             path[i, j] = 1
         while i >= 0:
             aln1 = seq1[i] + aln1
             aln2 = "-" + aln2
-            pipes = " " + pipes
+            pipes = " - " + pipes
             i -= 1
             path[i, j] = 1
         while j >= 0:
             aln2 = seq2[j] + aln2
             aln1 = "-" + aln1
-            pipes = " " + pipes
+            pipes = " - " + pipes
             j -= 1
             path[i, j] = 1
     return aln1, aln2, pipes, path
@@ -168,4 +171,4 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
 
     # lddt is normalized by the reference length
     global_lddt = table[l1_1, l2_1] / min(l1, l2)
-    return trace, global_lddt
+    return trace, global_lddt, local_lddt

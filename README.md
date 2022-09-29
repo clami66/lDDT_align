@@ -1,34 +1,28 @@
 # lDDT_align
-## A tool to align protein structures while maximizing global lDDT
+## A tool to align protein structures while maximizing lDDT
 
-Here, the lDDT score is calculated on single-atom amino acid representation (either CAs or sidechain centroids). The algorithm uses dynamic programming to find the optimal alignment, with some heuristics to speed up computation on larger structures.
-
+Here, the lDDT score is calculated on single-atom amino acid representation (either CAs or sidechain centroids).
+**No validation of stereochemical plausibility is performed.**
+The algorithm uses dynamic programming to find the optimal alignment, with some heuristics to speed up computation on larger structures.
 
 ## Installation
 
-To download the software, run:
+To download and install the software, run:
 
 ```
 git clone https://github.com/clami66/lDDT_align.git
+cd lDDT_align
+python -m pip install .
 ```
-
-`lDDT_align` has been tested on python 3.9 and depends on the following libraries:
-
-* numpy (tested: v1.21.6)
-* scipy (tested: v1.5.3)
-* numba (tested: v0.55.1)
-* biopython (tested: v1.79)
-
 
 ### Usage:
 
-```python
-src/lDDT.py -h
+```lDDT_align -h
 usage: lDDT.py [-h] [--thresholds thr [thr ...]] [--inclusion-radius R0] [--atom-type type] [--scale SCALE]
                [--gap-penalty GAP_PEN]
                ref query
 
-Performs structural alignment of two proteins in order to optimize their mutual global lDDT
+Performs structural alignment of two proteins in order to optimize their lDDT
 
 positional arguments:
   ref                   Reference protein PDB
@@ -37,13 +31,15 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --thresholds thr [thr ...], -t thr [thr ...]
-                        List of thresholds for lDDT scoring (default: [2])
+                        List of thresholds for lDDT scoring (default: [0.5, 1, 2, 4])
   --inclusion-radius R0, -r0 R0
                         Inclusion radius (default: 15.0)
   --atom-type type, -a type
                         Atom type to calculate distances (choices: {CA, centroid}, default: CA)
   --scale SCALE, -s SCALE
-                        Scale factor for the initial alignment (default: 3)
+                        Scale factor for the initial alignment (default: 1)
+  --prefilter PREFILTER, -f PREFILTER
+                        Minimum scaled lDDT score to calculate lDDT on full-scale protein (default: 0.3)
   --gap-penalty GAP_PEN, -g GAP_PEN
                         Penalty to open or extend a gap in the alignment (default: 0.0)
 
