@@ -54,7 +54,7 @@ $ lDDT_align test/6t1z.pdb test/T1024TS472_1-D1
 
 Reference: test/6t1z.pdb
 Query: test/T1024TS472_1-D1
-Total lDDT score: 0.7117741107940674
+Total lDDT score: 0.711
 
 Ref.	Score	Query
 G	-	-
@@ -79,7 +79,7 @@ $ python src/lDDT_align/buildDB.py data/scop-pdb/ data/scop-pdb.pkl
 Then launch the alignments against the pickle file:
 
 ```
-$ lDDT_align data/scop-pdb-float.pkl test/T1024TS472_1-D1
+$ lDDT_align data/scop-pdb.pkl test/T1024TS472_1-D1
 
 Reference Target lDDT
 d1ejfa_ T1024TS472_1-D1 0.192
