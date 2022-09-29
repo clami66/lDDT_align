@@ -1,7 +1,7 @@
 # lDDT_align
 ## A tool to align protein structures while maximizing lDDT
 
-Here, the lDDT score is calculated on single-atom amino acid representation (either $C\alpha$s or sidechain centroids).
+Here, the lDDT score is calculated on single-atom amino acid representation (either $C\alpha$ or sidechain centroids).
 **No validation of stereochemical plausibility is performed.**
 The algorithm uses dynamic programming to find the optimal alignment, with some heuristics to speed up computation on larger structures.
 
