@@ -69,7 +69,8 @@ K	-	-
 
 ## Example: aligning a query against a database of structures
 
-It is also posible to quickly align a query against a reference DB. First, build the DB from a folder of PDB files into a pickle file:
+It is also posible to quickly align a query against a reference DB to discover proteins with similar fold. In this case, only the total lDDT is output for each query-reference pair.
+First, build the DB from a folder of PDB files into a pickle file:
 
 ```
 $ python src/lDDT_align/buildDB.py data/scop-pdb/ data/scop-pdb.pkl
