@@ -45,7 +45,7 @@ optional arguments:
 
 ```
 
-## Example
+## Example: aligning two PDB files
 
 Aligning a CASP14 model to the native PDB structure:
 
@@ -65,4 +65,25 @@ D	0.78	D
 K	-	-
 T	-	-
 K	-	-
+```
+
+## Example: aligning a query against a database of structures
+
+It is also posible to quickly align a query against a reference DB. First, build the DB from a folder of PDB files into a pickle file:
+
+```
+$ python src/lDDT_align/buildDB.py data/scop-pdb/ data/scop-pdb.pkl
+```
+
+Then launch the alignments against the pickle file:
+
+```
+$ lDDT_align data/scop-pdb-float.pkl test/T1024TS472_1-D1
+
+Reference Target lDDT
+d1ejfa_ T1024TS472_1-D1 0.192
+d1ekea_ T1024TS472_1-D1 0.243
+d1e32a3 T1024TS472_1-D1 0.243
+...
+
 ```

@@ -35,7 +35,7 @@ def cache_distances(pdb, atom_type="CA"):
 
     distances = np.sqrt(
         np.sum((coords[:, np.newaxis, :] - coords[np.newaxis, :, :]) ** 2, axis=2)
-    )
+    ).astype(np.float32)
     distances[np.where(np.sum(coords, axis=1) == 0), :] = distances[
         :, np.where(np.sum(coords, axis=1) == 0)
     ] = 0
