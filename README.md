@@ -17,8 +17,8 @@ python -m pip install .
 
 ## Usage
 
-```lDDT_align -h
-usage: lDDT.py [-h] [--thresholds thr [thr ...]] [--inclusion-radius R0] [--atom-type type] [--scale SCALE]
+```
+lDDT_align [-h] [--thresholds thr [thr ...]] [--inclusion-radius R0] [--atom-type type] [--scale SCALE]
                [--gap-penalty GAP_PEN]
                ref query
 
