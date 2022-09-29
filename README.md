@@ -44,3 +44,25 @@ optional arguments:
                         Penalty to open or extend a gap in the alignment (default: 0.0)
 
 ```
+
+Example:
+
+Aligning a CASP14 model to the native PDB structure:
+
+```
+$ lDDT_align test/6t1z.pdb test/T1024TS472_1-D1
+
+Reference: test/6t1z.pdb
+Query: test/T1024TS472_1-D1
+Total lDDT score: 0.7117741107940674
+
+Ref.	Score	Query
+G	-	-
+K	0.64	K
+E	0.72	E
+D	0.78	D
+...
+K	-	-
+T	-	-
+K	-	-
+```
