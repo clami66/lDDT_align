@@ -11,6 +11,7 @@ from scipy import ndimage
 from numpy.lib.stride_tricks import sliding_window_view
 from .dynamic_programming import fill_table, traceback
 
+
 def cache_distances(pdb, atom_type="CA"):
 
     backbone_ids = ["N", "C", "O"]
@@ -68,15 +69,17 @@ def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
     n_total_dist = np.count_nonzero(selection, axis=0)
     n_total_dist[n_total_dist == 0] = 1
 
-    dist2_pad = np.pad(dist2, (0, l1-1))
-    dist2_pad[l2:,l2:] = dist2[:l1-1,:l1-1]
-    
+    dist2_pad = np.pad(dist2, (0, l1 - 1))
+    dist2_pad[l2:, l2:] = dist2[: l1 - 1, : l1 - 1]
+
     dist2_pad = sliding_window_view(dist2_pad, (l1, l1))
     dist2_pad = np.diagonal(dist2_pad)
     dist1[deselection] = 10000
-    
-    diff = np.abs(dist1[:,:,np.newaxis] - dist2_pad)
-    local_lddt = np.count_nonzero(diff < threshold, axis=0)/n_total_dist[:,np.newaxis]
+
+    diff = np.abs(dist1[:, :, np.newaxis] - dist2_pad)
+    local_lddt = (
+        np.count_nonzero(diff < threshold, axis=0) / n_total_dist[:, np.newaxis]
+    )
 
     for i in range(0, l1):
         for j in range(0, l2):
@@ -88,7 +91,7 @@ def fill_table_broadcast(dist1, dist2, threshold, r0, gap_pen, path):
                 insert -= gap_pen if j > 0 and not trace[i, j - 1] else 0
 
                 match = table[i - 1, j - 1] if i > 0 and j > 0 else 0
-                match += local_lddt[i, j-i] if j >= i else local_lddt[i, l2 - (i-j)]
+                match += local_lddt[i, j - i] if j >= i else local_lddt[i, l2 - (i - j)]
                 if match > insert and match > delete:
                     table[i, j] = match
                     trace[i, j] = 0
@@ -125,11 +128,16 @@ def align(
     seq2 = seq2[::scale]
 
     # two dynamic programming steps:
-    trace, global_lddt, local_lddt = fill_table(dist1, dist2, thresholds, r0, gap_pen, path)
-    alignment1, alignment2, pipes, path = traceback(
-        trace, local_lddt, seq1, seq2,
+    trace, global_lddt, local_lddt = fill_table(
+        dist1, dist2, thresholds, r0, gap_pen, path
     )
-    
+    alignment1, alignment2, pipes, path = traceback(
+        trace,
+        local_lddt,
+        seq1,
+        seq2,
+    )
+
     if scale > 1:
         path = ndimage.binary_dilation(path, iterations=2)
         path = np.kron(path, np.ones((scale, scale))).astype(np.uint8)
@@ -152,7 +160,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             scale=args.scale,
             gap_pen=args.gap_pen,
         )
-        
+
     if args.scale == 1 or lddt > args.prefilter:
         # The second search is full-scale, but follows the neighborhood of the path found in the first search
         lddt, alignments, _ = align(
@@ -166,7 +174,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             gap_pen=args.gap_pen,
         )
 
-    return lddt, alignments    
+    return lddt, alignments
 
 
 def run(args):
@@ -182,8 +190,10 @@ def run(args):
 
     decoy_seq, decoy_distances = cache_distances(query, atom_type=args.atom_type)
     ref_seq, ref_distances = cache_distances(ref, atom_type=args.atom_type)
-    
-    lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances,  args=args)
+
+    lddt, alignments = align_pair(
+        ref_seq, ref_distances, decoy_seq, decoy_distances, args=args
+    )
     return lddt, alignments
 
 
@@ -204,7 +214,9 @@ def run_db(args):
     print("Reference Target lDDT")
     for ref_name, (ref_seq, ref_distances) in ref_data.items():
 
-        lddt, alignments = align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args=args)
+        lddt, alignments = align_pair(
+            ref_seq, ref_distances, decoy_seq, decoy_distances, args=args
+        )
 
         print(f"{ref_name} {query_name} {lddt:.3f}")
     return
@@ -277,8 +289,7 @@ def main():
         print(f"Reference: {args.ref}")
         print(f"Query: {args.query}")
         print(f"Total lDDT score: {lddt}\n")
-        
+
         print(f"Ref.\tScore\tQuery")
         for i in range(len(alignments[0])):
             print(f"{alignments[0][i]}\t{local_lddt[i][:4]}\t{alignments[1][i]}")
-

@@ -19,9 +19,7 @@ def traceback(unsigned char [:, :] trace, float [:, :] local_lddt, str seq1, str
 
     path[i - 1, j - 1] = 1
     trace_i = trace[i]
-    print(seq1)
-    print(seq2)
-    print(trace.shape)
+
     while i >= 0 if j > i else j >= 0:
         
         while j >= 0 if i > j else i >= 0:
