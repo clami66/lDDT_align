@@ -20,19 +20,22 @@ def cache_distances(pdb, atom_type="CA"):
     nres = len(reslist)
 
     coords = np.zeros((nres, 3))
-    sequence = ""
+    sequence = ["*"] * nres
 
     for i, residue in enumerate(reslist):
         centroid_counter = 1
         for atom in residue.get_atoms():
             if atom_type == "CA" and atom.get_id() == "CA":
                 coords[i, :] = atom.get_coord()
-                sequence += seq1(residue.get_resname())
+                sequence[i] = seq1(residue.get_resname())
             elif atom_type == "centroid" and atom.get_id() not in backbone_ids:
                 coords[i, :] += atom.get_coord()
                 if centroid_counter == 1:
-                    sequence += seq1(residue.get_resname())
+                    sequence[i] = seq1(residue.get_resname())
                 centroid_counter += 1
+            if sequence[i] == "*": # missing CA or centroid get_atoms, get any coordinate
+                coords[i, :] = atom.get_coord()
+                sequence[i] = seq1(residue.get_resname())
         coords[i, :] /= centroid_counter
 
     distances = np.sqrt(
@@ -42,7 +45,7 @@ def cache_distances(pdb, atom_type="CA"):
         :, np.where(np.sum(coords, axis=1) == 0)
     ] = 0
 
-    return sequence, distances
+    return "".join(sequence), distances
 
 
 def lDDT(dist1, dist2, thresholds=[0.5, 1, 2, 4], r0=15.0):
