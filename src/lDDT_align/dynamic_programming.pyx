@@ -109,7 +109,7 @@ cdef select(float [:,:] dist, float r0, int l):
 @cython.wraparound(False)
 def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path, bint fp):
     cdef:
-        int i, j, t, n_total_dist_i, diff, i_1, j_1
+        int i, j, t, n_total_dist_i, n_total_dist_j, diff, i_1, j_1
         int n_thr = len(thresholds)
         int l1 = dist1.shape[0]
         int l2 = dist2.shape[0]
@@ -139,7 +139,7 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
             n_total_dist[i] = 1
 
     if fp:
-        selection2 = select(dist2, r0, l2)    
+        selection2 = select(dist2, r0, l2)
         n_total_dist2 = np.count_nonzero(selection2, axis=0).astype(np.int)
     else:
         n_total_dist2 = np.zeros(l2).astype(np.int)
@@ -155,7 +155,7 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         selection_i = selections[i]
         dist1_i = dist1[i]
         i_1 = i - 1
-        for j in range(0, l2):            
+        for j in range(0, l2):
             j_1 = j - 1
             n_total_dist_j = n_total_dist2[j]
             # if a previous rough path has been established, fill only around that
