@@ -120,6 +120,7 @@ def align(
     gap_pen=0,
     scale=1,
     path=None,
+    fp=False,
 ):
     l1 = dist1.shape[-1]
     l2 = dist2.shape[-1]
@@ -132,7 +133,7 @@ def align(
 
     # two dynamic programming steps:
     trace, global_lddt, local_lddt = fill_table(
-        dist1, dist2, thresholds, r0, gap_pen, path
+        dist1, dist2, thresholds, r0, gap_pen, path, fp
     )
     alignment1, alignment2, pipes, path = traceback(
         trace,
@@ -162,6 +163,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             path=path,
             scale=args.scale,
             gap_pen=args.gap_pen,
+            fp=args.fp,
         )
 
     if args.scale == 1 or lddt > args.prefilter:
@@ -175,6 +177,7 @@ def align_pair(ref_seq, ref_distances, decoy_seq, decoy_distances, args):
             r0=args.r0,
             path=path,
             gap_pen=args.gap_pen,
+            fp=args.fp,
         )
 
     return lddt, alignments
@@ -281,6 +284,13 @@ def main():
         type=float,
         default=0.0,
         help="Penalty to open or extend a gap in the alignment (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--false-positives",
+        "-fp",
+        dest="fp",
+        action="store_true",
+        help="Penalise distances within inclusion radius in the query that don't match the reference",
     )
     args = parser.parse_args()
 

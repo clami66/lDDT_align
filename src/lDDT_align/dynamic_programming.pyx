@@ -60,7 +60,7 @@ def traceback(unsigned char [:, :] trace, float [:, :] local_lddt, str seq1, str
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist):
+cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] selection1, float threshold, int n_dist, bint fp):
     cdef:
         int i, l1, l2, sel1, sel2, n_sel
         float c = 0
@@ -72,7 +72,10 @@ cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] sele
     n_sel = selection1.shape[0]
 
     if n_sel == 0:
-        return 1.0
+        if fp:
+            return 1.0/(n_dist-1)
+        else:
+            return 1.0
 
     for i in range(n_sel):
         sel1 = selection1[i]
@@ -81,7 +84,10 @@ cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] sele
             d = dist1[sel1] - dist2[sel2]
             if d < threshold and d > -threshold:
                 c += 1
-    tpr = c/n_dist
+    if fp:
+        tpr = c/(n_dist-c)
+    else:
+        tpr = c/(n_dist-1)
 
     return tpr
 
@@ -101,7 +107,7 @@ cdef select(float [:,:] dist, float r0, int l):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path):
+def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, float gap_pen, unsigned char [:,:] path, bint fp):
     cdef:
         int i, j, t, n_total_dist_i, diff, i_1, j_1
         int n_thr = len(thresholds)
@@ -115,9 +121,9 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         float [:, :] table = np.zeros((l1, l2), dtype=np.float32)
         float [:, :] local_lddt = np.zeros((l1, l2), dtype=np.float32)
         long [:] selection_i
-        long [:] n_total_dist
+        long [:] n_total_dist, n_total_dist2
         unsigned char [:, :] trace = np.zeros((l1, l2), dtype=np.uint8)
-        unsigned char [:,:] selection
+        unsigned char [:,:] selection, selection2
         float [:] dist1_i
 
     # A copy of the thresholds list as an array so that it can be accessed quicker
@@ -127,11 +133,20 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         thresholds_view[t] = thresholds[t]
 
     selection = select(dist1, r0, l1)
-
     n_total_dist = np.count_nonzero(selection, axis=0).astype(np.int)
     for i in range(l1):
         if n_total_dist[i] == 0:
             n_total_dist[i] = 1
+
+    if fp:
+        selection2 = select(dist2, r0, l2)    
+        n_total_dist2 = np.count_nonzero(selection2, axis=0).astype(np.int)
+    else:
+        n_total_dist2 = np.zeros(l2).astype(np.int)
+
+    for i in range(l2):
+        if n_total_dist2[i] == 0:
+            n_total_dist2[i] = 1
 
     selections = [np.where(selection[i, :])[0] for i in range(l1)]
 
@@ -142,6 +157,7 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
         i_1 = i - 1
         for j in range(0, l2):            
             j_1 = j - 1
+            n_total_dist_j = n_total_dist2[j]
             # if a previous rough path has been established, fill only around that
             if path[i, j]:
                 delete = table[i_1, j] if i > 0 else -gap_pen
@@ -154,7 +170,8 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
                 for t in range(n_thr):
                     threshold = thresholds_view[t]
                     diff = j - i
-                    score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i,)
+
+                    score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i+n_total_dist_j, fp,)
                 local_lddt[i, j] = score/n_thr
                 match = match + local_lddt[i, j]
                 if match >= insert and match >= delete:
