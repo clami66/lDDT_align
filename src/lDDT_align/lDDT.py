@@ -2,6 +2,7 @@
 
 import argparse
 import pickle
+import warnings
 from os.path import basename
 import numpy as np
 from Bio import PDB
@@ -188,8 +189,10 @@ def run(args):
     try:
         parser = PDBParser()
 
-        ref = parser.get_structure("reference", args.ref)[0]
-        query = parser.get_structure("query", args.query)[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ref = parser.get_structure("reference", args.ref)[0]
+            query = parser.get_structure("query", args.query)[0]
 
     except Exception as e:
         print(e)
@@ -207,25 +210,41 @@ def run_db(args):
 
     try:
         parser = PDBParser()
-        query = parser.get_structure("query", args.query)[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            query = parser.get_structure("query", args.query)[0]
 
     except Exception as e:
         print(e)
 
-    decoy_seq, decoy_distances = cache_distances(query, atom_type=args.atom_type)
-    query_name = basename(args.query)
+    ref_seq, ref_distances = cache_distances(query, atom_type=args.atom_type)
+    ref_name = basename(args.query)
     with open(args.ref, "rb") as f:
         ref_data = pickle.load(f)
     path = None
     print("Reference Target lDDT")
-    for ref_name, (ref_seq, ref_distances) in ref_data.items():
+    for query_name, (query_seq, query_distances) in ref_data.items():
 
         lddt, alignments = align_pair(
-            ref_seq, ref_distances, decoy_seq, decoy_distances, args=args
+            ref_seq, ref_distances, query_seq, query_distances, args=args
         )
 
         print(f"{ref_name} {query_name} {lddt:.3f}")
     return
+
+
+def format_alignment(alignments, local_lddt, horizontal):
+    
+    if horizontal:
+        formatted_alignment = "".join(alignments[0]) + "\n"
+        formatted_alignment += "".join([":" if (element[0] != "-" and element[1] != "-" and element[2] != "-") else " " for element in zip(local_lddt, alignments[0], alignments[1])]) + "\n"
+        formatted_alignment += "".join(alignments[1]) + "\n"
+    else:        
+        formatted_alignment = f"Ref.\tScore\tQuery\n"
+        for i in range(len(alignments[0])):
+            formatted_alignment += f"{alignments[0][i]}\t{local_lddt[i][:4]}\t{alignments[1][i]}\n"
+
+    return formatted_alignment
 
 
 def main():
@@ -292,6 +311,13 @@ def main():
         action="store_true",
         help="Penalise distances within inclusion radius in the query that don't match the reference",
     )
+    parser.add_argument(
+        "--horizontal",
+        "-ho",
+        dest="horizontal",
+        action="store_true",
+        help="Display horizontal alignment between sequences",
+    )
     args = parser.parse_args()
 
     if args.ref[-3:] == "pkl":
@@ -303,6 +329,4 @@ def main():
         print(f"Query: {args.query}")
         print(f"Total lDDT score: {lddt}\n")
 
-        print(f"Ref.\tScore\tQuery")
-        for i in range(len(alignments[0])):
-            print(f"{alignments[0][i]}\t{local_lddt[i][:4]}\t{alignments[1][i]}")
+    print(format_alignment(alignments, local_lddt, args.horizontal))
