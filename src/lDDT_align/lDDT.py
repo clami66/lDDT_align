@@ -194,7 +194,11 @@ def run(args):
             warnings.simplefilter("ignore")
             ref = parser.get_structure("reference", args.ref)[0]
             query = parser.get_structure("query", args.query)[0]
-
+            
+            if args.query_chains:
+                remove_extra_chains(query, args.query_chains)
+            if args.reference_chains:
+                remove_extra_chains(ref, args.reference_chains)
     except Exception as e:
         print(e)
 
@@ -244,7 +248,7 @@ def format_alignment(alignments, local_lddt, aln_type="standard", hit_id=""):
         formatted_alignment = f"#=GS {hit_id}/1-{len(alignments[0])} DE [subseq from] mol:protein length:{len([aa for aa in alignments[0] if aa != '-'])}\n\n"
         # actual alignment
         formatted_alignment +=  f"{hit_id}/1-{len(alignments[0])}           "
-        formatted_alignment += "".join(alignments[0]) + "\n"
+        formatted_alignment += "".join([aa if alignments[1][i] != '-' else "." for i, aa in enumerate(alignments[0])]) + "\n"
         formatted_alignment += "\n"
     else:
         formatted_alignment = f"Ref.\tScore\tQuery\n"
@@ -253,6 +257,13 @@ def format_alignment(alignments, local_lddt, aln_type="standard", hit_id=""):
 
     return formatted_alignment
 
+
+def remove_extra_chains(model, chains_to_keep):
+    chains = [chain.id for chain in model.get_chains()]
+
+    chains_to_remove = set(chains).difference(set(chains_to_keep))
+    for chain in chains_to_remove:
+        model.detach_child(chain)
 
 def main():
 
@@ -326,6 +337,20 @@ def main():
         type=str,
         help="Style of ouput alignment [long, horizontal, stockholm] (default: %(default)s))",
     )
+    parser.add_argument(
+        "--query_chains",
+        "-qc",
+        type=str,
+        help="Align specific chain(s) in the query",
+        nargs="+",
+    )
+    parser.add_argument(
+        "--reference_chains",
+        "-rc",
+        type=str,
+        help="Align specific chain(s) in the reference",
+        nargs="+",
+    )
     args = parser.parse_args()
 
     if args.ref[-3:] == "pkl":
@@ -337,4 +362,4 @@ def main():
             print(f"Query: {args.query}")
             print(f"Reference: {args.ref}")
             print(f"Total lDDT score: {lddt}\n")
-        print(format_alignment(alignments, local_lddt, aln_type=args.alignment_type, hit_id=Path(args.query).stem))
+        print(format_alignment(alignments, local_lddt, aln_type=args.alignment_type, hit_id=Path(args.ref).stem))
