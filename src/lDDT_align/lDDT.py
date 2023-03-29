@@ -4,6 +4,7 @@ import argparse
 import pickle
 import warnings
 from os.path import basename
+from pathlib import Path
 import numpy as np
 from Bio import PDB
 from Bio.PDB import PDBParser
@@ -233,13 +234,19 @@ def run_db(args):
     return
 
 
-def format_alignment(alignments, local_lddt, horizontal):
-    
-    if horizontal:
+def format_alignment(alignments, local_lddt, aln_type="standard", hit_id=""):
+    if aln_type == "horizontal":
         formatted_alignment = "".join(alignments[0]) + "\n"
         formatted_alignment += "".join([":" if (element[0] != "-" and element[1] != "-" and element[2] != "-") else " " for element in zip(local_lddt, alignments[0], alignments[1])]) + "\n"
         formatted_alignment += "".join(alignments[1]) + "\n"
-    else:        
+    elif aln_type == "stockholm": # minimal stokholm format that works in alphafold
+        # GS record, header
+        formatted_alignment = f"#=GS {hit_id}/1-{len(alignments[0])} DE [subseq from] mol:protein length:{len([aa for aa in alignments[0] if aa != '-'])}\n\n"
+        # actual alignment
+        formatted_alignment +=  f"{hit_id}/1-{len(alignments[0])}           "
+        formatted_alignment += "".join(alignments[0]) + "\n"
+        formatted_alignment += "\n"
+    else:
         formatted_alignment = f"Ref.\tScore\tQuery\n"
         for i in range(len(alignments[0])):
             formatted_alignment += f"{alignments[0][i]}\t{local_lddt[i][:4]}\t{alignments[1][i]}\n"
@@ -252,8 +259,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Performs structural alignment of two proteins in order to optimize their mutual lDDT"
     )
-    parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
     parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
+    parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
     parser.add_argument(
         "--thresholds",
         "-t",
@@ -312,11 +319,12 @@ def main():
         help="Penalise distances within inclusion radius in the query that don't match the reference",
     )
     parser.add_argument(
-        "--horizontal",
-        "-ho",
-        dest="horizontal",
-        action="store_true",
-        help="Display horizontal alignment between sequences",
+        "--alignment_type",
+        "-at",
+        dest="alignment_type",
+        default="long",
+        type=str,
+        help="Style of ouput alignment [long, horizontal, stockholm] (default: %(default)s))",
     )
     args = parser.parse_args()
 
@@ -325,8 +333,8 @@ def main():
     else:
         lddt, alignments = run(args)
         local_lddt = alignments[2].split()
-        print(f"Reference: {args.ref}")
-        print(f"Query: {args.query}")
-        print(f"Total lDDT score: {lddt}\n")
-
-    print(format_alignment(alignments, local_lddt, args.horizontal))
+        if args.alignment_type != "stockholm":
+            print(f"Query: {args.query}")
+            print(f"Reference: {args.ref}")
+            print(f"Total lDDT score: {lddt}\n")
+        print(format_alignment(alignments, local_lddt, aln_type=args.alignment_type, hit_id=Path(args.query).stem))

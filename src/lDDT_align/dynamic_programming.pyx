@@ -85,7 +85,7 @@ cdef float score_match(float [:] dist1, float [:] dist2, int diff, long [:] sele
             if d < threshold and d > -threshold:
                 c += 1
     if fp:
-        tpr = c/(n_dist-c)
+        tpr = c/(n_dist/2)
     else:
         tpr = c/(n_dist-1)
 
@@ -167,10 +167,9 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
 
                 match = table[i_1, j_1] if i > 0 and j > 0 else 0
                 score = 0
+                diff = j - i
                 for t in range(n_thr):
                     threshold = thresholds_view[t]
-                    diff = j - i
-
                     score = score + score_match(dist1_i, dist2[j], diff, selection_i, threshold, n_total_dist_i+n_total_dist_j, fp,)
                 local_lddt[i, j] = score/n_thr
                 match = match + local_lddt[i, j]
@@ -185,5 +184,5 @@ def fill_table(float [:,:] dist1, float [:,:] dist2, list thresholds, float r0, 
                     trace[i, j] = 2
 
     # lddt is normalized by the reference length
-    global_lddt = table[l1_1, l2_1] / min(l1, l2)
+    global_lddt = table[l1_1, l2_1] / l1
     return trace, global_lddt, local_lddt
