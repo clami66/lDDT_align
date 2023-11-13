@@ -270,8 +270,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Performs structural alignment of two proteins in order to optimize their mutual lDDT"
     )
-    parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
     parser.add_argument("ref", metavar="ref", type=str, help="Reference protein PDB")
+    parser.add_argument("query", metavar="query", type=str, help="Query protein PDB")
+    
     parser.add_argument(
         "--thresholds",
         "-t",
@@ -359,7 +360,7 @@ def main():
         lddt, alignments = run(args)
         local_lddt = alignments[2].split()
         if args.alignment_type != "stockholm":
-            print(f"Query: {args.query}")
             print(f"Reference: {args.ref}")
+            print(f"Query: {args.query}")
             print(f"Total lDDT score: {lddt}\n")
         print(format_alignment(alignments, local_lddt, aln_type=args.alignment_type, hit_id=Path(args.ref).stem))
